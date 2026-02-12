@@ -44,7 +44,10 @@ jobs:
           fi
 
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish --provenance --access public
+        # Authentication via npm Trusted Publishing (OIDC).
+        # Configure at: npmjs.com → package settings → Configure trusted publishing
+        # Falls back to NPM_TOKEN secret if trusted publishing is not configured.
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

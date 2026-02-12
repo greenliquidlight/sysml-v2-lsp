@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/daltskin/sysml-v2-lsp.git"
+    "url": "git+https://github.com/daltskin/sysml-v2-lsp.git"
   },
   "engines": {
     "node": ">=20",
