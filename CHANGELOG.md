@@ -18,7 +18,7 @@
 - Add explicit `require`/`default` conditions to `exports` field
 - Remove redundant `activationEvents` (auto-generated from `contributes.languages`)
 
-## [0.1.1] - 2025-06-15
+## [0.1.1]
 
 ### Fixed
 
