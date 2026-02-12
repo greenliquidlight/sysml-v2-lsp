@@ -1,171 +1,99 @@
 # SysML v2 Language Server
 
-A [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) implementation for [SysML v2](https://www.omgsysml.org/SysML-2.htm), powered by the ANTLR4 grammar from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar).
+A [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) with [Model Context Protocol](https://modelcontextprotocol.io/) implementation for [SysML v2](https://www.omgsysml.org/SysML-2.htm), providing rich editing, navigation, and code intelligence for LSP-compatible editors.
 
-## Features
+Powered by the ANTLR4 grammar from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar).
+
+> **Works with:** VS Code, Neovim, Emacs, Sublime Text, Helix, and any editor that supports the Language Server Protocol.
+
+---
+
+## Language Server Features
+
+The language server runs as a separate process and communicates over LSP — these features are available in **any** compatible editor.
 
 ### Editing & Navigation
 
-| Feature | Shortcut | Description |
-|---------|----------|-------------|
-| **Diagnostics** | — | Syntax errors, unknown identifiers, keyword typos with red/yellow squiggles |
-| **Code Completion** | `Ctrl+Space` | Keywords, snippets, and symbol suggestions with documentation |
-| **Signature Help** | auto on `(` | Parameter tooltips when invoking `action def` / `calc def` |
-| **Hover** | mouse hover | Element kind, type, qualified name, and documentation |
-| **Go to Definition** | `Ctrl+Click` / `F12` | Jump to a symbol's declaration |
-| **Find References** | `Shift+F12` | Find all usages of a symbol across the document |
-| **Rename Symbol** | `F2` | Rename a symbol and update all references |
-| **Linked Editing** | auto | Edit a name and all same-scope occurrences update simultaneously |
-| **Document Links** | `Ctrl+Click` | Clickable `import` paths — jump to the imported namespace |
+| Feature              | Description                                                            |
+| -------------------- | ---------------------------------------------------------------------- |
+| **Diagnostics**      | Syntax errors, unknown identifiers, keyword typos with severity levels |
+| **Code Completion**  | Keywords, snippets, and symbol suggestions with documentation          |
+| **Signature Help**   | Parameter tooltips when invoking `action def` / `calc def`             |
+| **Hover**            | Element kind, type, qualified name, and documentation                  |
+| **Go to Definition** | Jump to a symbol's declaration                                         |
+| **Find References**  | Find all usages of a symbol across open files                          |
+| **Rename Symbol**    | Rename a symbol and update all references                              |
+| **Linked Editing**   | Edit a name and all same-scope occurrences update simultaneously       |
+| **Document Links**   | Clickable `import` paths — jump to the imported namespace              |
 
 ### Code Intelligence
 
-| Feature | Shortcut | Description |
-|---------|----------|-------------|
-| **CodeLens** | — | "N references" shown above each definition, clickable |
-| **Inlay Hints** | — | Ghost text showing inferred types (`: Type`) and supertypes (`:> Super`) |
-| **Type Hierarchy** | `Shift+Alt+H` | Navigate specialization chains — supertypes and subtypes |
-| **Call Hierarchy** | `Shift+Alt+H` | Navigate `perform`/`include` chains between actions |
-| **Workspace Symbols** | `Ctrl+T` | Fuzzy search for any definition across all open files |
+| Feature               | Description                                                              |
+| --------------------- | ------------------------------------------------------------------------ |
+| **CodeLens**          | Reference counts shown above each definition                             |
+| **Inlay Hints**       | Ghost text showing inferred types (`: Type`) and supertypes (`:> Super`) |
+| **Type Hierarchy**    | Navigate specialization chains — supertypes and subtypes                 |
+| **Call Hierarchy**    | Navigate `perform`/`include` chains between actions                      |
+| **Workspace Symbols** | Fuzzy search for any definition across all open files                    |
 
-### Presentation
+### Presentation & Formatting
 
-| Feature | Shortcut | Description |
-|---------|----------|-------------|
-| **Semantic Tokens** | — | Rich, context-aware syntax highlighting (definitions, usages, keywords, types) |
-| **Document Symbols** | `Ctrl+Shift+O` | Outline panel + breadcrumbs showing SysML model structure |
-| **Folding Ranges** | — | Collapsible `{ }` blocks and comment regions |
-| **Selection Ranges** | `Shift+Alt+Right/Left` | Smart expand/shrink selection (word → line → block → enclosing block) |
+| Feature              | Description                                                                    |
+| -------------------- | ------------------------------------------------------------------------------ |
+| **Semantic Tokens**  | Rich, context-aware syntax highlighting (definitions, usages, keywords, types) |
+| **Document Symbols** | Outline / breadcrumbs showing SysML model structure                            |
+| **Folding Ranges**   | Collapsible `{ }` blocks and comment regions                                   |
+| **Selection Ranges** | Smart expand/shrink selection (word → line → block → enclosing block)          |
+| **Quick Fix**        | Fix keyword typos (e.g., `paart` → `part`)                                     |
+| **Formatting**       | Auto-indent, normalize braces, trim trailing whitespace                        |
 
-### Productivity
+### Parser
 
-| Feature | Shortcut | Description |
-|---------|----------|-------------|
-| **Quick Fix** | `Ctrl+.` | Fix keyword typos (e.g., `paart` → `part`) |
-| **Formatting** | `Shift+Alt+F` | Auto-indent, normalize braces, trim trailing whitespace |
-| **Snippets** | type prefix + `Tab` | 30 SysML snippets — `partdef`, `actiondef`, `reqdef`, `statedef`, etc. |
+- ANTLR4-based parser via [antlr4ng](https://github.com/mike-lischke/antlr4ng)
+- SLL/LL dual-mode strategy — fast path with automatic fallback
+- DFA warm-up for near-instant first-parse performance
+- Worker thread architecture for non-blocking document processing
+- Symbol table with qualified name resolution and cross-file references
 
-## Quick Start
-
-### Dev Container (recommended)
-
-Open in GitHub Codespaces or VS Code Dev Containers — everything is pre-installed.
-
-### Manual Setup
-
-```bash
-# Install dependencies
-npm install
-
-# Generate TypeScript parser from ANTLR4 grammar
-npm run generate
-
-# Build
-npm run build
-
-# Run tests
-npm test
-```
-
-### Development
-
-```bash
-# Watch mode — recompiles on file changes
-npm run watch
-
-# Then press F5 in VS Code to launch the extension + server
-```
-
-Use the **"Client + Server"** compound debug configuration to debug both sides simultaneously.
-
-## Architecture
-
-```
-┌──────────────────────┐     IPC     ┌──────────────────────────┐
-│   VS Code Extension  │ ◄─────────► │      Language Server          │
-│   (Language Client)   │             │      (Separate Process)       │
-├──────────────────────┤             ├──────────────────────────────┤
-│ • Starts server       │             │ • ANTLR4 parser (worker thread)│
-│ • Registers language  │             │ • Diagnostics + keyword typos │
-│                       │             │ • Completions / signature help│
-│                       │             │ • Hover / go-to-def / refs    │
-│                       │             │ • Semantic tokens / CodeLens  │
-│                       │             │ • Rename / linked editing     │
-│                       │             │ • Inlay hints / document links│
-│                       │             │ • Type & call hierarchy       │
-│                       │             │ • Formatting / folding / sel. │
-│                       │             │ • Workspace symbols           │
-└──────────────────────┘             └──────────────────────────┘
-
-┌──────────────────────┐   stdio    ┌──────────────────────────┐
-│   AI Assistant       │ ◄─────────► │      MCP Server              │
-│   (Claude, Copilot)  │             │      (Standalone Process)     │
-├──────────────────────┤             ├──────────────────────────────┤
-│ • Sends tool calls   │             │ • Parse / validate SysML      │
-│ • Reads resources    │             │ • Symbol table queries         │
-│ • Uses prompts       │             │ • Hierarchy / references       │
-│                       │             │ • Grammar reference resources  │
-│                       │             │ • Review / generate prompts    │
-└──────────────────────┘             └──────────────────────────┘
-```
-
-### Project Structure
-
-```
-sysml-v2-lsp/
-├── client/                 # VS Code Language Client extension
-│   └── src/extension.ts    # Starts LanguageClient, connects to server
-├── server/                 # Language Server (runs in separate process)
-│   └── src/
-│       ├── server.ts       # LSP connection, capability registration
-│       ├── mcpServer.ts    # MCP server (standalone, stdio transport)
-│       ├── documentManager.ts  # Parse cache, document lifecycle
-│       ├── parser/         # ANTLR4 parse pipeline
-│       ├── symbols/        # Symbol table, scopes, element types
-│       └── providers/      # LSP feature implementations
-├── grammar/                # ANTLR4 grammar files (.g4)
-├── test/                   # Unit tests (vitest) + E2E tests
-└── package.json            # Extension manifest + monorepo scripts
-```
-
-## Grammar Updates
-
-The grammar files in `grammar/` are sourced from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar). To pull the latest version:
-
-```bash
-npm run update-grammar
-npm run generate
-```
-
-## Available Commands
-
-```bash
-make install          # Install all dependencies
-make generate         # Generate TypeScript parser from grammar
-make build            # Compile + bundle
-make watch            # Watch mode
-make test             # Run unit tests
-make lint             # ESLint
-make package          # Build .vsix
-make update-grammar   # Pull latest grammar from upstream
-make ci               # Full CI pipeline
-```
+---
 
 ## MCP Server (AI Integration)
 
-The project includes a [Model Context Protocol](https://modelcontextprotocol.io/) server that lets AI assistants parse, validate, and query SysML v2 models.
+A standalone [Model Context Protocol](https://modelcontextprotocol.io/) server that lets AI assistants parse, validate, and query SysML v2 models. Runs independently of any editor.
 
-### VS Code
+### Tools
 
-The workspace includes `.vscode/mcp.json` — the MCP server is automatically available to GitHub Copilot. Build first:
+| Tool              | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `parse`           | Parse SysML source, build symbol table, return summary |
+| `validate`        | Check syntax and return errors                         |
+| `getSymbols`      | List symbols (filter by kind, URI, definitions/usages) |
+| `getDefinition`   | Look up a symbol by name or qualified name             |
+| `getReferences`   | Find all references to a symbol                        |
+| `getHierarchy`    | Get parent–child containment structure                 |
+| `getModelSummary` | Counts, kinds, and loaded documents                    |
 
-```bash
-npm run build
-```
+### Resources
 
-### Claude Desktop
+| URI                        | Description                  |
+| -------------------------- | ---------------------------- |
+| `sysml://element-kinds`    | All recognised element kinds |
+| `sysml://keywords`         | Complete keyword list        |
+| `sysml://grammar-overview` | Language structure reference |
 
-Add to `claude_desktop_config.json`:
+### Prompts
+
+| Prompt            | Description                          |
+| ----------------- | ------------------------------------ |
+| `review-sysml`    | Review a SysML model for correctness |
+| `explain-element` | Explain a SysML element kind         |
+| `generate-sysml`  | Generate SysML from a description    |
+
+### MCP Setup
+
+**VS Code / GitHub Copilot** — The workspace includes `.vscode/mcp.json`, so the MCP server is automatically available after building.
+
+**Claude Desktop** — Add to `claude_desktop_config.json`:
 
 ```json
 {
@@ -178,70 +106,209 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-### Available Tools
+**Any MCP client** — Run the server directly via stdio:
 
-| Tool | Description |
-|------|-------------|
-| `parse` | Parse SysML source, build symbol table, return summary |
-| `validate` | Check syntax and return errors |
-| `getSymbols` | List symbols (filter by kind, URI, definitions/usages) |
-| `getDefinition` | Look up a symbol by name or qualified name |
-| `getReferences` | Find all references to a symbol |
-| `getHierarchy` | Get parent–child containment structure |
-| `getModelSummary` | Counts, kinds, and loaded documents |
-
-### Available Resources
-
-| URI | Description |
-|-----|-------------|
-| `sysml://element-kinds` | All recognised element kinds |
-| `sysml://keywords` | Complete keyword list |
-| `sysml://grammar-overview` | Language structure reference |
-
-### Available Prompts
-
-| Prompt | Description |
-|--------|-------------|
-| `review-sysml` | Review a SysML model for correctness |
-| `explain-element` | Explain a SysML element kind |
-| `generate-sysml` | Generate SysML from a description |
+```bash
+npx sysml-v2-lsp   # after npm install -g sysml-v2-lsp
+# or
+node dist/server/mcpServer.mjs
+```
 
 ### Quick Test Examples
 
-Once the MCP server is running (green dot in **MCP: List Servers**), try these prompts in Copilot Chat:
+Once the MCP server is connected, try these prompts:
 
-**Parse a model:**
-> `@sysml-v2` parse this: `package Demo { part def Vehicle { attribute speed : Real; } part car : Vehicle; }`
+> Parse this: `package Demo { part def Vehicle { attribute speed : Real; } part car : Vehicle; }`
 
-**Validate with errors:**
-> `@sysml-v2` validate this: `part def Broken { attribute x :`
+> Validate this: `part def Broken { attribute x :`
 
-**List symbols after parsing:**
-> `@sysml-v2` what symbols are in the model?
+> What symbols are in the model?
 
-**Look up a definition:**
-> `@sysml-v2` find the definition of Vehicle
+> Find the definition of Vehicle
 
-**Get the hierarchy:**
-> `@sysml-v2` show the hierarchy of car
+> Show the hierarchy of car
 
-**Get a model summary:**
-> `@sysml-v2` summarise the loaded model
+---
 
-> **Tip:** Click the **tools icon** (wrench) at the bottom of the Chat input to see all available `sysml-v2` tools.
+## VS Code Extension
+
+The project ships as a VS Code extension with additional editor-specific features on top of the LSP.
+
+| Feature                    | Description                                                                    |
+| -------------------------- | ------------------------------------------------------------------------------ |
+| **TextMate Grammar**       | Syntax highlighting via `syntaxes/sysml.tmLanguage.json`                       |
+| **30 Snippets**            | `partdef`, `actiondef`, `reqdef`, `statedef`, and more — type prefix + `Tab`   |
+| **Language Configuration** | Bracket matching, comment toggling, auto-closing pairs, folding markers        |
+| **Dev Container**          | Open in GitHub Codespaces or VS Code Dev Containers — everything pre-installed |
+| **Debug Configurations**   | "Client + Server" compound launch for simultaneous debugging                   |
+| **Example Files**          | `examples/` folder with camera, toaster, and vehicle models                    |
+
+### Install from VSIX
+
+```bash
+npm run build:production
+npx @vscode/vsce package --no-dependencies
+code --install-extension sysml-v2-lsp-*.vsix
+```
+
+---
+
+## Getting Started
+
+### Using the VS Code Extension
+
+Open in GitHub Codespaces or Dev Containers (recommended), or manually:
+
+```bash
+npm install
+npm run build
+# Press F5 to launch the Extension Development Host
+```
+
+### Using the LSP with Other Editors
+
+Build the server, then point your editor's LSP client at it:
+
+```bash
+npm install && npm run build
+# Server binary: dist/server/server.js
+# Start with: node dist/server/server.js --stdio
+```
+
+**Neovim** (via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)):
+
+```lua
+vim.lsp.start({
+  name = 'sysml',
+  cmd = { 'node', '/path/to/sysml-v2-lsp/dist/server/server.js', '--stdio' },
+  filetypes = { 'sysml' },
+})
+```
+
+**Emacs** (via [lsp-mode](https://github.com/emacs-lsp/lsp-mode)):
+
+```elisp
+(lsp-register-client
+  (make-lsp-client
+    :new-connection (lsp-stdio-connection
+                     '("node" "/path/to/sysml-v2-lsp/dist/server/server.js" "--stdio"))
+    :activation-fn (lsp-activate-on "sysml")
+    :server-id 'sysml-lsp))
+```
+
+### Using the MCP Server
+
+```bash
+npm install && npm run build
+node dist/server/mcpServer.mjs   # stdio transport
+```
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                     Language Server (Node.js)                    │
+│                                                                  │
+│  ┌──────────────┐  ┌──────────────────┐  ┌───────────────────┐   │
+│  │ ANTLR4 Parser│  │   Symbol Table   │  │   21 Providers    │   │
+│  │ (worker thr.)│──│ scopes, q-names  │──│ completion, hover │   │
+│  │ SLL/LL dual  │  │ cross-file refs  │  │ def, refs, rename │   │
+│  └──────────────┘  └──────────────────┘  │ hierarchy, format │   │
+│                                          │ tokens, lens, ... │   │
+│                                          └───────────────────┘   │
+└──────────────────────┬───────────────────────────┬───────────────┘
+                       │ LSP (stdio/IPC)           │
+          ┌────────────┴────────────┐              │
+          │      Any Editor         │              │
+          │  VS Code, Neovim,       │              │
+          │  Emacs, Sublime, ...    │              │
+          └─────────────────────────┘              │
+                                                   │
+┌──────────────────────────────────────────────────┴──────────────┐
+│                     MCP Server (standalone)                     │
+│  7 tools · 3 resources · 3 prompts · stdio transport            │
+│                                                                 │
+│  ┌────────────────┐  ┌────────────────┐  ┌──────────────────┐   │
+│  │  Claude, Copilot│  │  Cursor, Windsurf│ │  Any MCP Client│   │
+│  └────────────────┘  └────────────────┘  └──────────────────┘   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Project Structure
+
+```
+sysml-v2-lsp/
+├── server/                 # Language Server + MCP Server
+│   └── src/
+│       ├── server.ts           # LSP connection, capability registration
+│       ├── mcpServer.ts        # MCP server entry point (stdio)
+│       ├── mcpCore.ts          # MCP handler logic (testable)
+│       ├── documentManager.ts  # Parse cache, document lifecycle
+│       ├── parser/             # ANTLR4 parse pipeline + worker thread
+│       ├── symbols/            # Symbol table, scopes, element types
+│       └── providers/          # 21 LSP feature implementations
+├── client/                 # VS Code Language Client extension
+│   └── src/extension.ts        # Starts LanguageClient, registers language
+├── grammar/                # ANTLR4 grammar files (.g4)
+├── syntaxes/               # TextMate grammar for VS Code
+├── snippets/               # 30 SysML code snippets
+├── examples/               # Sample SysML models
+├── test/                   # Unit tests (vitest) — 88 tests
+└── package.json            # Extension manifest + monorepo scripts
+```
+
+---
+
+## Development
+
+```bash
+npm install                 # Install all dependencies
+npm run generate            # Generate TypeScript parser from ANTLR4 grammar
+npm run build               # Compile + bundle (esbuild)
+npm run watch               # Watch mode — recompiles on changes
+npm test                    # Run 88 unit tests (vitest)
+npm run lint                # ESLint
+```
+
+Or use the Makefile:
+
+```bash
+make install          # Install all dependencies
+make generate         # Generate TypeScript parser from grammar
+make build            # Compile + bundle
+make watch            # Watch mode
+make test             # Run unit tests
+make lint             # ESLint
+make package          # Build .vsix
+make package-server   # Build npm tarball
+make update-grammar   # Pull latest grammar from upstream
+make ci               # Full CI pipeline
+```
+
+### Grammar Updates
+
+The grammar files in `grammar/` are sourced from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar). To pull the latest:
+
+```bash
+npm run update-grammar && npm run generate
+```
+
+---
 
 ## Technology Stack
 
-| Component | Technology |
-|-----------|-----------|
-| Language | TypeScript (strict mode) |
-| Runtime | Node.js ≥ 18 |
-| Parser | ANTLR4 via [antlr4ng](https://github.com/mike-lischke/antlr4ng) |
-| Generator | [antlr-ng](https://github.com/nicklockwood/antlr-ng) |
-| LSP | [vscode-languageserver](https://github.com/microsoft/vscode-languageserver-node) |
-| MCP | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
-| Bundler | esbuild |
-| Tests | vitest |
+| Component | Technology                                                                          |
+| --------- | ----------------------------------------------------------------------------------- |
+| Language  | TypeScript (strict mode)                                                            |
+| Runtime   | Node.js ≥ 20                                                                        |
+| Parser    | ANTLR4 via [antlr4ng](https://github.com/mike-lischke/antlr4ng)                     |
+| Generator | [antlr-ng](https://github.com/nicklockwood/antlr-ng)                                |
+| LSP       | [vscode-languageserver](https://github.com/microsoft/vscode-languageserver-node)    |
+| MCP       | [@modelcontextprotocol/sdk](https://github.com/modelcontextprotocol/typescript-sdk) |
+| Bundler   | esbuild                                                                             |
+| Tests     | vitest                                                                              |
 
 ## Related Projects
 
