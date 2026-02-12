@@ -13,9 +13,10 @@ const outputChannel = window.createOutputChannel('SysML v2 LSP');
 export function activate(context: ExtensionContext): void {
     outputChannel.appendLine('SysML v2 extension activating...');
 
-    // Path to the server module
+    // Path to the server module — use the esbuild-bundled output in dist/
+    // so the extension works both in development and when packaged as a VSIX.
     const serverModule = context.asAbsolutePath(
-        path.join('server', 'out', 'server.js')
+        path.join('dist', 'server', 'server.js')
     );
     outputChannel.appendLine(`Server module path: ${serverModule}`);
 

@@ -30,14 +30,14 @@
     "sysml-mcp": "dist/server/mcpServer.mjs"
   },
   "exports": {
-    ".": "./index.cjs"
+    ".": {
+      "require": "./index.cjs",
+      "default": "./index.cjs"
+    }
   },
   "publishConfig": {
     "access": "public"
   },
-  "activationEvents": [
-    "onLanguage:sysml"
-  ],
   "main": "./dist/client/extension.js",
   "contributes": {
     "commands": [
@@ -118,7 +118,7 @@
     "clean": "rm -rf client/out server/out dist *.vsix *.tgz",
     "update-grammar": "curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Lexer.g4 -o grammar/SysMLv2Lexer.g4 && curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Parser.g4 -o grammar/SysMLv2Parser.g4 && curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Lexer.tokens -o grammar/SysMLv2Lexer.tokens && echo '✅ Grammar files updated from daltskin/sysml-v2-grammar'",
     "prepublishOnly": "npm run build:production",
-    "postinstall": "[ -d client ] && cd client && npm install && cd ../server && npm install || true"
+    "postinstall": "[ -d client ] && cd client && npm install && cd .. && cd server && npm install || true"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

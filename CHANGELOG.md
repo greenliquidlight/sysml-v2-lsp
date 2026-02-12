@@ -1,6 +1,32 @@
 # Changelog
 
-## [Unreleased]
+## [0.1.2]
+
+### Added
+
+- Release checklist (`.github/RELEASE_CHECKLIST.md`)
+
+### Fixed
+
+- Remove unused `antlr4-c3` dependency from server package
+- Fix client extension server path to use bundled `dist/` output (VSIX was broken)
+- Fix `postinstall` script silently swallowing server install failures
+- Sync versions across `server/package.json`, `client/package.json`, and MCP server to `0.1.1`
+- Align Node engine requirement to `>=20` in `server/package.json` (was `>=18`)
+- Update esbuild target from `node18` to `node20`
+- Add `*.tgz` to `.gitignore` to prevent accidental commits
+- Add explicit `require`/`default` conditions to `exports` field
+- Remove redundant `activationEvents` (auto-generated from `contributes.languages`)
+
+## [0.1.1] - 2025-06-15
+
+### Fixed
+
+- Update postinstall script to handle missing `client` directory gracefully
+- Add npm trusted publishing (OIDC) support and normalize repository URL
+- Remove accidentally committed `.tgz` archive
+- Skip `npm version` in release workflow when git tag already matches `package.json`
+- Drop Node 18 from CI matrix (Vite 7 requires Node 20+)
 
 ## [0.1.0]
 

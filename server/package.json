@@ -1,12 +1,12 @@
 {
   "name": "sysml-v2-lsp-server",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "private": true,
   "description": "SysML v2 Language Server",
   "license": "MIT",
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   },
   "dependencies": {
     "antlr4ng": "^3.0.16",

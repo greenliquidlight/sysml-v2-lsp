@@ -2,6 +2,7 @@ node_modules/
 client/out/
 server/out/
 *.vsix
+*.tgz
 .vscode-test/
 *.tsbuildinfo
 .DS_Store

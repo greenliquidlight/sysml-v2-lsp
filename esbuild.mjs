@@ -9,7 +9,7 @@ const baseConfig = {
     minify: isProduction,
     sourcemap: !isProduction,
     platform: 'node',
-    target: 'node18',
+    target: 'node20',
     logLevel: 'info',
 };
 

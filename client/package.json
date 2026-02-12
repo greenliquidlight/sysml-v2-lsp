@@ -1,6 +1,6 @@
 {
   "name": "sysml-v2-lsp-client",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "SysML v2 Language Client for VS Code",
   "license": "MIT",
