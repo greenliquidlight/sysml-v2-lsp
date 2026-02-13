@@ -18,6 +18,8 @@ export class SymbolTable {
     private symbolsByUri = new Map<string, SysMLSymbol[]>();
     /** The global scope */
     private globalScope: Scope;
+    /** Parser rule names — cached from the last parse result for minification-safe rule lookup */
+    private ruleNames: string[] = [];
 
     constructor() {
         this.globalScope = new Scope('__global__');
@@ -29,6 +31,13 @@ export class SymbolTable {
     build(uri: string, parseResult: ParseResult): void {
         // Clear previous entries for this URI
         this.clearUri(uri);
+
+        // Cache parser rule names for minification-safe rule lookup.
+        // Under esbuild minification, constructor.name is mangled (e.g.
+        // PackageDeclarationContext → "w3"), but ruleIndex remains a
+        // stable numeric constant and ruleNames is a string array — both
+        // survive minification intact.
+        this.ruleNames = parseResult.parser.ruleNames;
 
         if (!parseResult.tree) {
             return;
@@ -301,12 +310,25 @@ export class SymbolTable {
     }
 
     /**
-     * Get the parser rule name from a context (e.g., "packageDeclaration").
+     * Get the parser rule name from a context (e.g., "PackageDeclaration").
+     *
+     * Uses the ANTLR ruleIndex + ruleNames lookup instead of
+     * constructor.name, because esbuild (and other bundlers) mangle
+     * class names during minification, making constructor.name unreliable.
+     *
+     * ANTLR ruleNames are camelCase (e.g. "packageDeclaration"), but the
+     * rest of this file expects PascalCase (e.g. "PackageDeclaration") for
+     * the RULE_KIND_MAP and pattern matching, so we capitalize the first letter.
      */
     private getRuleName(ctx: ParserRuleContext): string {
+        const idx = ctx.ruleIndex;
+        if (idx >= 0 && idx < this.ruleNames.length) {
+            const name = this.ruleNames[idx];
+            // Capitalize first letter: camelCase → PascalCase
+            return name.charAt(0).toUpperCase() + name.slice(1);
+        }
+        // Fallback: try constructor.name for non-parser contexts
         const ctorName = ctx.constructor.name;
-        // ANTLR generates contexts like "PackageDeclarationContext"
-        // Strip "Context" suffix to get the rule name
         if (ctorName.endsWith('Context')) {
             return ctorName.slice(0, -'Context'.length);
         }

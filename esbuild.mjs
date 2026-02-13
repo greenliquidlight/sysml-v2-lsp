@@ -19,7 +19,7 @@ const serverBuild = esbuild.build({
     ...baseConfig,
     format: 'esm',
     entryPoints: ['server/src/server.ts'],
-    outfile: 'dist/server/server.js',
+    outfile: 'dist/server/server.mjs',
     external: ['vscode'],
     banner: {
         // Provide createRequire for CJS dependencies bundled into ESM
@@ -34,7 +34,7 @@ const workerBuild = esbuild.build({
     ...baseConfig,
     format: 'esm',
     entryPoints: ['server/src/parser/parseWorker.ts'],
-    outfile: 'dist/server/parser/parseWorker.js',
+    outfile: 'dist/server/parser/parseWorker.mjs',
     banner: {
         js: `import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);`,
     },

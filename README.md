@@ -1,5 +1,9 @@
 # SysML v2 Language Server
 
+[![npm version](https://img.shields.io/npm/v/sysml-v2-lsp)](https://www.npmjs.com/package/sysml-v2-lsp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Socket Badge](https://socket.dev/api/badge/npm/package/sysml-v2-lsp)](https://socket.dev/npm/package/sysml-v2-lsp)
+
 A [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) with [Model Context Protocol](https://modelcontextprotocol.io/) implementation for [SysML v2](https://www.omgsysml.org/SysML-2.htm), providing rich editing, navigation, and code intelligence for LSP-compatible editors.
 
 Powered by the ANTLR4 grammar from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar).

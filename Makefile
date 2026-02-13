@@ -1,4 +1,4 @@
-.PHONY: help install generate build watch test test-e2e lint package package-server clean update-grammar ci
+.PHONY: help install generate build watch test test-e2e lint package package-server test-package clean update-grammar ci
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -38,6 +38,35 @@ package-server: ## Build server tarball for use in other extensions
 	@echo "  npm install ./path/to/sysml-v2-lsp-*.tgz"
 	@echo "  — or —"
 	@echo "  npm install github:daltskin/sysml-v2-lsp"
+
+test-package: package-server ## Test npm package in a simulated consumer project
+	@echo "📦 Testing npm package as a consumer..."
+	@rm -rf /tmp/sysml-test-pkg
+	@mkdir -p /tmp/sysml-test-pkg
+	@cd /tmp/sysml-test-pkg && npm init -y > /dev/null 2>&1
+	@cd /tmp/sysml-test-pkg && npm install "$$(ls -t $(CURDIR)/sysml-v2-lsp-*.tgz | head -1)" --silent 2>&1
+	@cd /tmp/sysml-test-pkg && node -e " \
+		const pkg = require('sysml-v2-lsp'); \
+		const fs = require('fs'); \
+		const { fork } = require('child_process'); \
+		let ok = true; \
+		for (const [name, p] of Object.entries(pkg)) { \
+			const exists = fs.existsSync(p); \
+			console.log(exists ? '  ✅' : '  ❌', name, '→', p); \
+			if (!exists) ok = false; \
+		} \
+		if (!ok) { console.log('❌ Missing files'); process.exit(1); } \
+		const child = fork(pkg.serverPath, ['--stdio'], { silent: true }); \
+		child.on('error', e => { console.log('❌ Fork failed:', e.message); process.exit(1); }); \
+		setTimeout(() => { \
+			console.log('  ✅ server.mjs forks and runs (pid', child.pid + ')'); \
+			child.kill(); \
+			console.log(''); \
+			console.log('✅ npm package test passed'); \
+			process.exit(0); \
+		}, 2000); \
+	"
+	@rm -rf /tmp/sysml-test-pkg
 
 clean: ## Clean build artifacts
 	npm run clean

@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.1.3]
+
+### Added
+
+- `make test-package` target to test npm package in a simulated consumer project
+- README badges: npm version, license, Socket.dev supply chain security
+
+### Fixed
+
+- Fix `constructor.name` minification breaking code lens and symbol resolution — `getRuleName()` now uses ANTLR4 `ruleIndex` + `ruleNames[]` instead of `constructor.name` which is mangled by esbuild
+- Rename ESM bundles from `.js` to `.mjs` for Node 20 compatibility — `child_process.fork()` now correctly treats server and worker as ESM
+- Move `@modelcontextprotocol/sdk` and `zod` from `dependencies` to `devDependencies` — they are fully bundled by esbuild and not needed at runtime
+- Guard `postinstall` script with `[ -f tsconfig.json ]` so it only runs in dev checkout, not in consumer installs
+
 ## [0.1.2]
 
 ### Added

@@ -136,7 +136,7 @@ const pendingParses = new Map<number, {
 
 function getParseWorker(): Worker {
     if (parseWorker) return parseWorker;
-    const workerPath = join(__ownDirname, 'parser', 'parseWorker.js');
+    const workerPath = join(__ownDirname, 'parser', 'parseWorker.mjs');
     parseWorker = new Worker(workerPath);
 
     parseWorker.on('message', (msg: ParseResponse & { warmup?: boolean; elapsed?: number; interrupted?: boolean; chunksCompleted?: number; totalChunks?: number }) => {
