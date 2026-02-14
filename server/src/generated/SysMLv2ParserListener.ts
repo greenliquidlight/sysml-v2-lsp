@@ -490,10 +490,10 @@ import { ExtendedUsageContext } from "./SysMLv2Parser.js";
 import { FilterPackageImportDeclarationContext } from "./SysMLv2Parser.js";
 import { NamespaceImportDirectContext } from "./SysMLv2Parser.js";
 import { CalculationUsageDeclarationContext } from "./SysMLv2Parser.js";
-import { EmptyActionUsageContext } from "./SysMLv2Parser.js";
-import { EmptyFeatureContext } from "./SysMLv2Parser.js";
-import { EmptyMultiplicityContext } from "./SysMLv2Parser.js";
-import { EmptyUsageContext } from "./SysMLv2Parser.js";
+import { EmptyActionUsage_Context } from "./SysMLv2Parser.js";
+import { EmptyFeature_Context } from "./SysMLv2Parser.js";
+import { EmptyMultiplicity_Context } from "./SysMLv2Parser.js";
+import { EmptyUsage_Context } from "./SysMLv2Parser.js";
 import { FilterPackageImportContext } from "./SysMLv2Parser.js";
 import { NonFeatureChainPrimaryExpressionContext } from "./SysMLv2Parser.js";
 import { PortConjugationContext } from "./SysMLv2Parser.js";
@@ -5385,45 +5385,45 @@ export class SysMLv2ParserListener implements ParseTreeListener {
      */
     exitCalculationUsageDeclaration?: (ctx: CalculationUsageDeclarationContext) => void;
     /**
-     * Enter a parse tree produced by `SysMLv2Parser.emptyActionUsage`.
+     * Enter a parse tree produced by `SysMLv2Parser.emptyActionUsage_`.
      * @param ctx the parse tree
      */
-    enterEmptyActionUsage?: (ctx: EmptyActionUsageContext) => void;
+    enterEmptyActionUsage_?: (ctx: EmptyActionUsage_Context) => void;
     /**
-     * Exit a parse tree produced by `SysMLv2Parser.emptyActionUsage`.
+     * Exit a parse tree produced by `SysMLv2Parser.emptyActionUsage_`.
      * @param ctx the parse tree
      */
-    exitEmptyActionUsage?: (ctx: EmptyActionUsageContext) => void;
+    exitEmptyActionUsage_?: (ctx: EmptyActionUsage_Context) => void;
     /**
-     * Enter a parse tree produced by `SysMLv2Parser.emptyFeature`.
+     * Enter a parse tree produced by `SysMLv2Parser.emptyFeature_`.
      * @param ctx the parse tree
      */
-    enterEmptyFeature?: (ctx: EmptyFeatureContext) => void;
+    enterEmptyFeature_?: (ctx: EmptyFeature_Context) => void;
     /**
-     * Exit a parse tree produced by `SysMLv2Parser.emptyFeature`.
+     * Exit a parse tree produced by `SysMLv2Parser.emptyFeature_`.
      * @param ctx the parse tree
      */
-    exitEmptyFeature?: (ctx: EmptyFeatureContext) => void;
+    exitEmptyFeature_?: (ctx: EmptyFeature_Context) => void;
     /**
-     * Enter a parse tree produced by `SysMLv2Parser.emptyMultiplicity`.
+     * Enter a parse tree produced by `SysMLv2Parser.emptyMultiplicity_`.
      * @param ctx the parse tree
      */
-    enterEmptyMultiplicity?: (ctx: EmptyMultiplicityContext) => void;
+    enterEmptyMultiplicity_?: (ctx: EmptyMultiplicity_Context) => void;
     /**
-     * Exit a parse tree produced by `SysMLv2Parser.emptyMultiplicity`.
+     * Exit a parse tree produced by `SysMLv2Parser.emptyMultiplicity_`.
      * @param ctx the parse tree
      */
-    exitEmptyMultiplicity?: (ctx: EmptyMultiplicityContext) => void;
+    exitEmptyMultiplicity_?: (ctx: EmptyMultiplicity_Context) => void;
     /**
-     * Enter a parse tree produced by `SysMLv2Parser.emptyUsage`.
+     * Enter a parse tree produced by `SysMLv2Parser.emptyUsage_`.
      * @param ctx the parse tree
      */
-    enterEmptyUsage?: (ctx: EmptyUsageContext) => void;
+    enterEmptyUsage_?: (ctx: EmptyUsage_Context) => void;
     /**
-     * Exit a parse tree produced by `SysMLv2Parser.emptyUsage`.
+     * Exit a parse tree produced by `SysMLv2Parser.emptyUsage_`.
      * @param ctx the parse tree
      */
-    exitEmptyUsage?: (ctx: EmptyUsageContext) => void;
+    exitEmptyUsage_?: (ctx: EmptyUsage_Context) => void;
     /**
      * Enter a parse tree produced by `SysMLv2Parser.filterPackageImport`.
      * @param ctx the parse tree

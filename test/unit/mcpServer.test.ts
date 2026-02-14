@@ -13,6 +13,12 @@ describe('MCP Server Core', () => {
     let SYSML_KEYWORDS: typeof import('../../server/src/mcpCore.js').SYSML_KEYWORDS;
     let formatSymbol: typeof import('../../server/src/mcpCore.js').formatSymbol;
     let formatError: typeof import('../../server/src/mcpCore.js').formatError;
+    let handleResourceElementKinds: typeof import('../../server/src/mcpCore.js').handleResourceElementKinds;
+    let handleResourceKeywords: typeof import('../../server/src/mcpCore.js').handleResourceKeywords;
+    let handleResourceGrammarOverview: typeof import('../../server/src/mcpCore.js').handleResourceGrammarOverview;
+    let handlePromptReviewSysml: typeof import('../../server/src/mcpCore.js').handlePromptReviewSysml;
+    let handlePromptExplainElement: typeof import('../../server/src/mcpCore.js').handlePromptExplainElement;
+    let handlePromptGenerateSysml: typeof import('../../server/src/mcpCore.js').handlePromptGenerateSysml;
 
     let ctx: InstanceType<typeof McpContext>;
 
@@ -30,6 +36,12 @@ describe('MCP Server Core', () => {
         SYSML_KEYWORDS = mod.SYSML_KEYWORDS;
         formatSymbol = mod.formatSymbol;
         formatError = mod.formatError;
+        handleResourceElementKinds = mod.handleResourceElementKinds;
+        handleResourceKeywords = mod.handleResourceKeywords;
+        handleResourceGrammarOverview = mod.handleResourceGrammarOverview;
+        handlePromptReviewSysml = mod.handlePromptReviewSysml;
+        handlePromptExplainElement = mod.handlePromptExplainElement;
+        handlePromptGenerateSysml = mod.handlePromptGenerateSysml;
 
         // Fresh context for each test — no shared state leaking between tests
         ctx = new McpContext();
@@ -359,6 +371,99 @@ describe('MCP Server Core', () => {
             expect(formatted.column).toBe(1);
             expect(formatted.message).toBe('test');
             expect(formatted.length).toBe(1);
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Resource handlers
+    // -----------------------------------------------------------------------
+
+    describe('handleResourceElementKinds', () => {
+        it('should return categorised element kinds', () => {
+            const result = handleResourceElementKinds();
+            expect(result.definitions).toBeDefined();
+            expect(result.usages).toBeDefined();
+            expect(result.total).toBe(
+                (result.definitions as string[]).length +
+                (result.usages as string[]).length +
+                (result.other as string[]).length,
+            );
+        });
+    });
+
+    describe('handleResourceKeywords', () => {
+        it('should return keywords with count', () => {
+            const result = handleResourceKeywords();
+            expect(result.keywords).toBeDefined();
+            expect(result.count).toBe(result.keywords.length);
+            expect(result.count).toBeGreaterThan(100);
+            expect(result.keywords).toContain('package');
+            expect(result.keywords).toContain('part');
+            expect(result.keywords).toContain('requirement');
+        });
+    });
+
+    describe('handleResourceGrammarOverview', () => {
+        it('should return markdown content', () => {
+            const result = handleResourceGrammarOverview();
+            expect(result).toContain('# SysML v2 Grammar Overview');
+            expect(result).toContain('## Element Categories');
+            expect(result).toContain('part def');
+            expect(result).toContain('## Specialisation Syntax');
+        });
+    });
+
+    // -----------------------------------------------------------------------
+    // Prompt handlers
+    // -----------------------------------------------------------------------
+
+    describe('handlePromptReviewSysml', () => {
+        it('should return review prompt with parse results for valid code', () => {
+            const messages = handlePromptReviewSysml(ctx, VALID_MODEL);
+            expect(messages).toHaveLength(1);
+            expect(messages[0].role).toBe('user');
+            expect(messages[0].content.type).toBe('text');
+            expect(messages[0].content.text).toContain('Parse Results');
+            expect(messages[0].content.text).toContain('0 syntax errors');
+            expect(messages[0].content.text).toContain('CameraSystem');
+            expect(messages[0].content.text).toContain('Source Code');
+        });
+
+        it('should include errors in prompt for invalid code', () => {
+            const messages = handlePromptReviewSysml(ctx, INVALID_MODEL);
+            expect(messages[0].content.text).toContain('Errors:');
+            expect(messages[0].content.text).not.toContain('0 syntax errors');
+        });
+    });
+
+    describe('handlePromptExplainElement', () => {
+        it('should return explain prompt with element name', () => {
+            const messages = handlePromptExplainElement('part def');
+            expect(messages).toHaveLength(1);
+            expect(messages[0].role).toBe('user');
+            expect(messages[0].content.text).toContain('part def');
+            expect(messages[0].content.text).toContain('systems engineering');
+            expect(messages[0].content.text).toContain('SysML v2 code example');
+        });
+    });
+
+    describe('handlePromptGenerateSysml', () => {
+        it('should return generate prompt with description', () => {
+            const messages = handlePromptGenerateSysml('A drone delivery system');
+            expect(messages).toHaveLength(1);
+            expect(messages[0].role).toBe('user');
+            expect(messages[0].content.text).toContain('A drone delivery system');
+            expect(messages[0].content.text).toContain('valid SysML v2 syntax');
+        });
+
+        it('should include scope when provided', () => {
+            const messages = handlePromptGenerateSysml('A drone', 'structural only');
+            expect(messages[0].content.text).toContain('Focus on: structural only');
+        });
+
+        it('should use default scope when not provided', () => {
+            const messages = handlePromptGenerateSysml('A drone');
+            expect(messages[0].content.text).toContain('Include structural definitions');
         });
     });
 });

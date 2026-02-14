@@ -490,10 +490,10 @@ import { ExtendedUsageContext } from "./SysMLv2Parser.js";
 import { FilterPackageImportDeclarationContext } from "./SysMLv2Parser.js";
 import { NamespaceImportDirectContext } from "./SysMLv2Parser.js";
 import { CalculationUsageDeclarationContext } from "./SysMLv2Parser.js";
-import { EmptyActionUsageContext } from "./SysMLv2Parser.js";
-import { EmptyFeatureContext } from "./SysMLv2Parser.js";
-import { EmptyMultiplicityContext } from "./SysMLv2Parser.js";
-import { EmptyUsageContext } from "./SysMLv2Parser.js";
+import { EmptyActionUsage_Context } from "./SysMLv2Parser.js";
+import { EmptyFeature_Context } from "./SysMLv2Parser.js";
+import { EmptyMultiplicity_Context } from "./SysMLv2Parser.js";
+import { EmptyUsage_Context } from "./SysMLv2Parser.js";
 import { FilterPackageImportContext } from "./SysMLv2Parser.js";
 import { NonFeatureChainPrimaryExpressionContext } from "./SysMLv2Parser.js";
 import { PortConjugationContext } from "./SysMLv2Parser.js";
@@ -3436,29 +3436,29 @@ export class SysMLv2ParserVisitor<Result> extends AbstractParseTreeVisitor<Resul
      */
     visitCalculationUsageDeclaration?: (ctx: CalculationUsageDeclarationContext) => Result;
     /**
-     * Visit a parse tree produced by `SysMLv2Parser.emptyActionUsage`.
+     * Visit a parse tree produced by `SysMLv2Parser.emptyActionUsage_`.
      * @param ctx the parse tree
      * @return the visitor result
      */
-    visitEmptyActionUsage?: (ctx: EmptyActionUsageContext) => Result;
+    visitEmptyActionUsage_?: (ctx: EmptyActionUsage_Context) => Result;
     /**
-     * Visit a parse tree produced by `SysMLv2Parser.emptyFeature`.
+     * Visit a parse tree produced by `SysMLv2Parser.emptyFeature_`.
      * @param ctx the parse tree
      * @return the visitor result
      */
-    visitEmptyFeature?: (ctx: EmptyFeatureContext) => Result;
+    visitEmptyFeature_?: (ctx: EmptyFeature_Context) => Result;
     /**
-     * Visit a parse tree produced by `SysMLv2Parser.emptyMultiplicity`.
+     * Visit a parse tree produced by `SysMLv2Parser.emptyMultiplicity_`.
      * @param ctx the parse tree
      * @return the visitor result
      */
-    visitEmptyMultiplicity?: (ctx: EmptyMultiplicityContext) => Result;
+    visitEmptyMultiplicity_?: (ctx: EmptyMultiplicity_Context) => Result;
     /**
-     * Visit a parse tree produced by `SysMLv2Parser.emptyUsage`.
+     * Visit a parse tree produced by `SysMLv2Parser.emptyUsage_`.
      * @param ctx the parse tree
      * @return the visitor result
      */
-    visitEmptyUsage?: (ctx: EmptyUsageContext) => Result;
+    visitEmptyUsage_?: (ctx: EmptyUsage_Context) => Result;
     /**
      * Visit a parse tree produced by `SysMLv2Parser.filterPackageImport`.
      * @param ctx the parse tree

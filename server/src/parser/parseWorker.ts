@@ -152,6 +152,9 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.INDIVIDUAL, SysMLv2Lexer.FLOW, SysMLv2Lexer.SUCCESSION,
     SysMLv2Lexer.BINDING, SysMLv2Lexer.DEF, SysMLv2Lexer.COLON,
     SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT, SysMLv2Lexer.COLON_COLON,
+    SysMLv2Lexer.ACTOR, SysMLv2Lexer.STAKEHOLDER, SysMLv2Lexer.SUBJECT,
+    SysMLv2Lexer.VARIANT, SysMLv2Lexer.REF, SysMLv2Lexer.SNAPSHOT,
+    SysMLv2Lexer.TIMESLICE,
 ]);
 
 interface SerializedDiagnostic {
@@ -178,6 +181,19 @@ function validateKeywordsFromTokens(tokenStream: CommonTokenStream): SerializedD
 
         // Check previous token — if it's a definition keyword, this is a name
         if (i > 0 && NAME_PRECEDING_KEYWORDS.has(visible[i - 1].type)) continue;
+
+        // If preceded by dot, '=', ':', '::', ':>', ':>>' this is a value/type/path, not a keyword
+        if (i > 0) {
+            const prevType = visible[i - 1].type;
+            if (prevType === SysMLv2Lexer.DOT ||
+                prevType === SysMLv2Lexer.EQ ||
+                prevType === SysMLv2Lexer.COLON ||
+                prevType === SysMLv2Lexer.COLON_COLON ||
+                prevType === SysMLv2Lexer.COLON_GT ||
+                prevType === SysMLv2Lexer.COLON_GT_GT) {
+                continue;
+            }
+        }
 
         // Check next token — if it's a keyword continuation, this might be a typo
         let positionOk = i === 0;
@@ -487,7 +503,28 @@ function flagUnknownIdentifiers(tokenStream: CommonTokenStream): SerializedDiagn
                 next.type === SysMLv2Lexer.COLON_GT_GT ||
                 next.type === SysMLv2Lexer.DEF ||
                 next.type === SysMLv2Lexer.SEMI ||
-                next.type === SysMLv2Lexer.LBRACK) {
+                next.type === SysMLv2Lexer.LBRACK ||
+                // If followed by '::', this is a qualified name / namespace path
+                // (e.g., toaster::maxTemp in a constraint body)
+                next.type === SysMLv2Lexer.COLON_COLON ||
+                // If followed by '.', this is a feature chain expression
+                // (e.g., bicycle.totalMass in a constraint body)
+                next.type === SysMLv2Lexer.DOT ||
+                // If followed by an operator, this is an expression
+                // (e.g., maxSpeed > 0, width == 100)
+                next.type === SysMLv2Lexer.LT ||
+                next.type === SysMLv2Lexer.GT ||
+                next.type === SysMLv2Lexer.LE ||
+                next.type === SysMLv2Lexer.GE ||
+                next.type === SysMLv2Lexer.EQ_EQ ||
+                next.type === SysMLv2Lexer.BANG_EQ ||
+                next.type === SysMLv2Lexer.PLUS ||
+                next.type === SysMLv2Lexer.MINUS ||
+                next.type === SysMLv2Lexer.STAR ||
+                next.type === SysMLv2Lexer.SLASH ||
+                next.type === SysMLv2Lexer.AND ||
+                next.type === SysMLv2Lexer.OR ||
+                next.type === SysMLv2Lexer.IMPLIES) {
                 continue;
             }
         }

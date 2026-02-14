@@ -14,10 +14,8 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { isDefinition, isUsage } from './symbols/sysmlElements.js';
 import {
     McpContext,
-    parseAndBuild,
     handleParse,
     handleValidate,
     handleGetSymbols,
@@ -25,8 +23,12 @@ import {
     handleGetReferences,
     handleGetHierarchy,
     handleGetModelSummary,
-    getElementKinds,
-    SYSML_KEYWORDS,
+    handleResourceElementKinds,
+    handleResourceKeywords,
+    handleResourceGrammarOverview,
+    handlePromptReviewSysml,
+    handlePromptExplainElement,
+    handlePromptGenerateSysml,
 } from './mcpCore.js';
 
 // ---------------------------------------------------------------------------
@@ -171,7 +173,7 @@ server.registerResource(
         mimeType: 'application/json',
     },
     async (uri) => ({
-        contents: [{ uri: uri.href, text: JSON.stringify(getElementKinds(), null, 2) }],
+        contents: [{ uri: uri.href, text: JSON.stringify(handleResourceElementKinds(), null, 2) }],
     }),
 );
 
@@ -184,7 +186,7 @@ server.registerResource(
         mimeType: 'application/json',
     },
     async (uri) => ({
-        contents: [{ uri: uri.href, text: JSON.stringify({ keywords: SYSML_KEYWORDS, count: SYSML_KEYWORDS.length }, null, 2) }],
+        contents: [{ uri: uri.href, text: JSON.stringify(handleResourceKeywords(), null, 2) }],
     }),
 );
 
@@ -197,65 +199,7 @@ server.registerResource(
         mimeType: 'text/markdown',
     },
     async (uri) => ({
-        contents: [{
-            uri: uri.href,
-            text: `# SysML v2 Grammar Overview
-
-## Element Categories
-
-### Definitions (Types)
-Definitions declare reusable types:
-- \`part def\` — structural element type
-- \`attribute def\` — value type
-- \`port def\` — interface point type
-- \`connection def\` — connection type
-- \`interface def\` — interface type
-- \`action def\` — behavior type
-- \`state def\` — state machine type
-- \`requirement def\` — requirement type
-- \`constraint def\` — constraint type
-- \`item def\` — general item type
-- \`enum def\` — enumeration type
-- \`calc def\` — calculation type
-- \`use case def\` — use case type
-- \`allocation def\` — allocation type
-- \`view def\` / \`viewpoint def\` — viewpoint types
-
-### Usages (Instances)
-Usages create instances of definitions:
-- \`part\` — structural instance
-- \`attribute\` — value instance
-- \`port\` — port instance
-- \`action\` — action step
-- \`state\` — state instance
-- \`requirement\` — requirement instance
-- \`item\` — item instance
-
-## Specialisation Syntax
-- \`part car : Vehicle\` — \`car\` specialises \`Vehicle\`
-- \`part car :> baseVehicle\` — \`car\` subsets \`baseVehicle\`
-- \`part car :>> specificVehicle\` — \`car\` redefines \`specificVehicle\`
-
-## Packages & Namespaces
-\`\`\`sysml
-package VehicleModel {
-    part def Vehicle { ... }
-    part car : Vehicle;
-}
-\`\`\`
-
-## Documentation
-\`\`\`sysml
-part def Vehicle {
-    doc /* A general vehicle definition */
-    attribute mass : Real;
-}
-\`\`\`
-
-## Unrestricted Names
-Names with spaces use single quotes: \`part 'Main Assembly' : Assembly;\`
-`,
-        }],
+        contents: [{ uri: uri.href, text: handleResourceGrammarOverview() }],
     }),
 );
 
@@ -270,47 +214,9 @@ server.registerPrompt(
         description: 'Analyse a SysML v2 model for correctness, best practices, and potential improvements.',
         argsSchema: { code: z.string().describe('The SysML v2 source code to review') },
     },
-    async ({ code }) => {
-        const { errors, symbolCount } = parseAndBuild(ctx, code, 'review.sysml');
-        const allSymbols = ctx.symbolTable.getSymbolsForUri('review.sysml');
-        const defs = allSymbols.filter((s) => isDefinition(s.kind));
-        const usages = allSymbols.filter((s) => isUsage(s.kind));
-
-        const context = [
-            `Parsed: ${symbolCount} symbols, ${errors.length} syntax errors`,
-            `Definitions: ${defs.map((d) => `${d.kind} ${d.name}`).join(', ') || 'none'}`,
-            `Usages: ${usages.map((u) => `${u.kind} ${u.name}`).join(', ') || 'none'}`,
-        ];
-        if (errors.length > 0) {
-            context.push(`Errors: ${errors.map((e) => `line ${e.line + 1}: ${e.message}`).join('; ')}`);
-        }
-
-        return {
-            messages: [{
-                role: 'user' as const,
-                content: {
-                    type: 'text' as const,
-                    text: `Please review the following SysML v2 model for correctness, completeness, and best practices.
-
-## Parse Results
-${context.join('\n')}
-
-## Source Code
-\`\`\`sysml
-${code}
-\`\`\`
-
-Please check for:
-1. Syntax errors and how to fix them
-2. Missing type specialisations
-3. Naming conventions (PascalCase for definitions, camelCase for usages)
-4. Missing documentation (doc comments)
-5. Structural completeness (are there orphaned usages without definitions?)
-6. Suggestions for additional ports, attributes, or constraints`,
-                },
-            }],
-        };
-    },
+    async ({ code }) => ({
+        messages: handlePromptReviewSysml(ctx, code),
+    }),
 );
 
 server.registerPrompt(
@@ -323,21 +229,7 @@ server.registerPrompt(
         },
     },
     async ({ element }) => ({
-        messages: [{
-            role: 'user' as const,
-            content: {
-                type: 'text' as const,
-                text: `Explain the SysML v2 element kind "${element}" in detail. Include:
-
-1. What it represents in systems engineering
-2. The difference between its definition form and usage form (if applicable)
-3. Common attributes and relationships
-4. A simple SysML v2 code example
-5. When to use it vs similar elements
-
-Use the SysML v2 syntax (not SysML v1 block diagrams).`,
-            },
-        }],
+        messages: handlePromptExplainElement(element),
     }),
 );
 
@@ -351,37 +243,9 @@ server.registerPrompt(
             scope: z.string().optional().describe('Desired scope/focus (e.g., "structural only", "with requirements", "full behavioral")'),
         },
     },
-    async ({ description, scope }) => {
-        const scopeHint = scope
-            ? `Focus on: ${scope}`
-            : 'Include structural definitions, key attributes, ports, and connections.';
-
-        return {
-            messages: [{
-                role: 'user' as const,
-                content: {
-                    type: 'text' as const,
-                    text: `Generate a SysML v2 model for the following system description.
-
-## System Description
-${description}
-
-## Scope
-${scopeHint}
-
-## Requirements
-- Use valid SysML v2 syntax
-- Organise elements in packages
-- Use PascalCase for definitions, camelCase for usages
-- Add doc comments for key elements
-- Include type specialisations where appropriate
-- Use ports and connections for interfaces between parts
-
-Return the complete SysML v2 source code in a single code block.`,
-                },
-            }],
-        };
-    },
+    async ({ description, scope }) => ({
+        messages: handlePromptGenerateSysml(description, scope),
+    }),
 );
 
 // ---------------------------------------------------------------------------

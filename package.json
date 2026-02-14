@@ -39,6 +39,9 @@
     "access": "public"
   },
   "main": "./dist/client/extension.js",
+  "activationEvents": [
+    "onLanguage:sysml"
+  ],
   "contributes": {
     "commands": [
       {
@@ -58,19 +61,6 @@
           ".kerml"
         ],
         "configuration": "./language-configuration.json"
-      }
-    ],
-    "grammars": [
-      {
-        "language": "sysml",
-        "scopeName": "source.sysml",
-        "path": "./syntaxes/sysml.tmLanguage.json"
-      }
-    ],
-    "snippets": [
-      {
-        "language": "sysml",
-        "path": "./snippets/sysml.json"
       }
     ],
     "configuration": {
@@ -116,7 +106,7 @@
     "package": "vsce package",
     "package:server": "npm run build:production && npm pack",
     "clean": "rm -rf client/out server/out dist *.vsix *.tgz",
-    "update-grammar": "curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Lexer.g4 -o grammar/SysMLv2Lexer.g4 && curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Parser.g4 -o grammar/SysMLv2Parser.g4 && curl -fsSL https://raw.githubusercontent.com/daltskin/sysml-v2-grammar/main/grammar/SysMLv2Lexer.tokens -o grammar/SysMLv2Lexer.tokens && echo '✅ Grammar files updated from daltskin/sysml-v2-grammar'",
+    "update-grammar": "curl -fsSL https://raw.githubusercontent.com/daltskin/grammars-v4/master/sysml-v2/SysMLv2Lexer.g4 -o grammar/SysMLv2Lexer.g4 && curl -fsSL https://raw.githubusercontent.com/daltskin/grammars-v4/master/sysml-v2/SysMLv2Parser.g4 -o grammar/SysMLv2Parser.g4 && echo '✅ Grammar files updated from daltskin/grammars-v4'",
     "prepublishOnly": "npm run build:production",
     "postinstall": "[ -f tsconfig.json ] && [ -d client ] && cd client && npm install && cd .. && cd server && npm install || true"
   },

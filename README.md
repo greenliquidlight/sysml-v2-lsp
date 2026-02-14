@@ -134,26 +134,20 @@ Once the MCP server is connected, try these prompts:
 
 ---
 
-## VS Code Extension
+## VS Code Dev Extension
 
-The project ships as a VS Code extension with additional editor-specific features on top of the LSP.
+A lightweight VS Code extension is included for **development and debugging** of the language server. It registers the `sysml` language ID, starts the LSP client, and provides a restart command — nothing more.
 
-| Feature                    | Description                                                                    |
-| -------------------------- | ------------------------------------------------------------------------------ |
-| **TextMate Grammar**       | Syntax highlighting via `syntaxes/sysml.tmLanguage.json`                       |
-| **30 Snippets**            | `partdef`, `actiondef`, `reqdef`, `statedef`, and more — type prefix + `Tab`   |
-| **Language Configuration** | Bracket matching, comment toggling, auto-closing pairs, folding markers        |
-| **Dev Container**          | Open in GitHub Codespaces or VS Code Dev Containers — everything pre-installed |
-| **Debug Configurations**   | "Client + Server" compound launch for simultaneous debugging                   |
-| **Example Files**          | `examples/` folder with camera, toaster, and vehicle models                    |
+For the full VS Code experience (TextMate grammar, snippets, language configuration, visualization), see [daltskin/VSCode_SysML_Extension](https://github.com/daltskin/VSCode_SysML_Extension).
 
-### Install from VSIX
-
-```bash
-npm run build:production
-npx @vscode/vsce package --no-dependencies
-code --install-extension sysml-v2-lsp-*.vsix
-```
+| Feature                  | Description                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------ |
+| **Language Registration**| Registers `.sysml` / `.kerml` file types                                       |
+| **LSP Client**           | Starts and manages the language server process                                 |
+| **Restart Command**      | `SysML: Restart Language Server` command                                       |
+| **Dev Container**        | Open in GitHub Codespaces or VS Code Dev Containers — everything pre-installed |
+| **Debug Configurations** | "Client + Server" compound launch for simultaneous debugging                   |
+| **Example Files**        | `examples/` folder with camera, toaster, and vehicle models                    |
 
 ---
 
@@ -256,10 +250,8 @@ sysml-v2-lsp/
 ├── client/                 # VS Code Language Client extension
 │   └── src/extension.ts        # Starts LanguageClient, registers language
 ├── grammar/                # ANTLR4 grammar files (.g4)
-├── syntaxes/               # TextMate grammar for VS Code
-├── snippets/               # 30 SysML code snippets
 ├── examples/               # Sample SysML models
-├── test/                   # Unit tests (vitest) — 88 tests
+├── test/                   # Unit tests (vitest)
 └── package.json            # Extension manifest + monorepo scripts
 ```
 

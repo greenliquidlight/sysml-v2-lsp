@@ -116,6 +116,9 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.INDIVIDUAL, SysMLv2Lexer.FLOW, SysMLv2Lexer.SUCCESSION,
     SysMLv2Lexer.BINDING, SysMLv2Lexer.DEF, SysMLv2Lexer.COLON,
     SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT, SysMLv2Lexer.COLON_COLON,
+    SysMLv2Lexer.ACTOR, SysMLv2Lexer.STAKEHOLDER, SysMLv2Lexer.SUBJECT,
+    SysMLv2Lexer.VARIANT, SysMLv2Lexer.REF, SysMLv2Lexer.SNAPSHOT,
+    SysMLv2Lexer.TIMESLICE,
 ]);
 
 /**
@@ -126,12 +129,20 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
  */
 function looksLikeKeywordPosition(visibleTokens: Token[], index: number): boolean {
     // Check previous token — if it's a definition keyword, this is a name, not a typo
-    for (let i = index - 1; i >= 0; i--) {
-        const prev = visibleTokens[i];
+    if (index > 0) {
+        const prev = visibleTokens[index - 1];
         if (NAME_PRECEDING_KEYWORDS.has(prev.type)) {
             return false; // This identifier is a name after a keyword
         }
-        break; // only check the immediately preceding token
+        // If preceded by dot, '=', ':', '::', ':>', ':>>' this is a value/type/path, not a keyword
+        if (prev.type === SysMLv2Lexer.DOT ||
+            prev.type === SysMLv2Lexer.EQ ||
+            prev.type === SysMLv2Lexer.COLON ||
+            prev.type === SysMLv2Lexer.COLON_COLON ||
+            prev.type === SysMLv2Lexer.COLON_GT ||
+            prev.type === SysMLv2Lexer.COLON_GT_GT) {
+            return false;
+        }
     }
 
     // Check next token — if it's something that follows a keyword, this is likely a typo

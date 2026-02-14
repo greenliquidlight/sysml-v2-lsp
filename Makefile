@@ -71,7 +71,15 @@ test-package: package-server ## Test npm package in a simulated consumer project
 clean: ## Clean build artifacts
 	npm run clean
 
-update-grammar: ## Pull latest grammar from daltskin/sysml-v2-grammar
-	npm run update-grammar
+GRAMMAR_REPO := daltskin/grammars-v4
+GRAMMAR_BRANCH := master
+GRAMMAR_DIR := sysml-v2
+GRAMMAR_BASE_URL := https://raw.githubusercontent.com/$(GRAMMAR_REPO)/$(GRAMMAR_BRANCH)/$(GRAMMAR_DIR)
+
+update-grammar: ## Pull latest grammar from daltskin/grammars-v4
+	@echo "📥 Fetching grammar from $(GRAMMAR_REPO)/$(GRAMMAR_DIR)..."
+	curl -fsSL $(GRAMMAR_BASE_URL)/SysMLv2Lexer.g4 -o grammar/SysMLv2Lexer.g4
+	curl -fsSL $(GRAMMAR_BASE_URL)/SysMLv2Parser.g4 -o grammar/SysMLv2Parser.g4
+	@echo "✅ Grammar files updated from $(GRAMMAR_REPO)"
 
 ci: lint build test ## Full CI pipeline
