@@ -36,7 +36,7 @@ import {
 // ---------------------------------------------------------------------------
 
 const server = new McpServer(
-    { name: 'sysml-v2', version: '0.1.1' },
+    { name: 'sysml-v2', version: '0.1.4' },
     { capabilities: { logging: {} } },
 );
 

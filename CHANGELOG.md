@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.4]
+
+### Added
+
+- Extract MCP resource and prompt handler logic into testable `mcpCore.ts` module — 3 resource handlers (element kinds, keywords, grammar overview) and 3 prompt handlers (review SysML, explain element, generate SysML)
+- `constraint` grammar rules: `ConstraintDefinition`, `ConstraintUsage`, `RequirementConstraintMember`, `assert constraint`
+- 9 new unit tests for MCP resources and prompts (101 total tests, up from 92)
+- Constraint-related unit tests
+
+### Fixed
+
+- Fix false positive diagnostics on qualified names with `::` (e.g., `toaster::maxTemp`) — add `COLON_COLON` to next-token skip list in `parseWorker.ts`
+- Fix identifiers after `actor`, `stakeholder`, `subject`, `variant`, `ref`, `snapshot`, `timeslice` incorrectly flagged as keyword typos — add to `NAME_PRECEDING_KEYWORDS` in both validators
+- Fix false positive keyword typo diagnostics on dot-chain and expression-position identifiers (e.g., `transportPassenger.driver`) — skip identifiers preceded by `.`, `=`, `:`, `::`, `:>`, `:>>`
+- Remove unused `parseAndBuild` import in `mcpServer.ts` after refactoring
+
+### Changed
+
+- Slim VS Code dev extension to lightweight harness — move TextMate grammar and snippets to separate `VSCode_SysML_Extension` repo
+- Simplify `language-configuration.json` to minimal comments and brackets for dev use
+
 ## [0.1.3]
 
 ### Added

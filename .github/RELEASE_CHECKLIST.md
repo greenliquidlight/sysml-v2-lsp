@@ -32,12 +32,14 @@ Use this checklist when preparing a new release of **sysml-v2-lsp**.
 ## Post-release
 
 - [ ] Install the published VSIX in VS Code and smoke-test:
-  - Syntax highlighting
-  - Diagnostics (error squiggles)
+  - Diagnostics (error squiggles, no false positives)
   - Go to definition / Find references
   - Code completion
   - Hover information
   - Document symbols / Outline
+  - Code lens / Call hierarchy
+  - Rename / Linked editing
+- [ ] Test MCP server end-to-end: `npx sysml-mcp` — verify tools, resources, and prompts
 - [ ] Publish to VS Code Marketplace (if not automated):
   ```bash
   npx @vscode/vsce publish
