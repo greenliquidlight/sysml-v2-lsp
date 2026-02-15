@@ -113,6 +113,28 @@ class JsonRpcClient:
             collected.append(msg)
         return collected
 
+    def drain_until_diagnostics(self, uri: str, timeout: float = 30.0) -> list[dict[str, Any]]:
+        """Read notifications until diagnostics for *uri* arrive, or *timeout* expires."""
+        import select
+        collected: list[dict[str, Any]] = []
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            remaining = max(deadline - time.monotonic(), 0)
+            rlist, _, _ = select.select([self._proc.stdout], [], [], remaining)
+            if not rlist:
+                break
+            msg = self._read_message()
+            if msg is None:
+                break
+            if "method" in msg:
+                self._handle_server_message(msg)
+            collected.append(msg)
+            # Stop early once we've received diagnostics for our document
+            if msg.get("method") == "textDocument/publishDiagnostics":
+                if msg.get("params", {}).get("uri") == uri:
+                    break
+        return collected
+
     # -- Server-initiated messages --------------------------------------------
 
     _diagnostics: dict[str, list[dict[str, Any]]] = {}
@@ -349,8 +371,9 @@ def main() -> None:
             # 2. Open document
             uri = open_document(client, sysml_file)
 
-            # Give the server a moment to parse and publish diagnostics
-            client.drain_notifications(timeout=2.0)
+            # Wait for the server to parse and publish diagnostics.
+            # The first file may take ~20s (DFA warm-up); subsequent files are fast.
+            client.drain_until_diagnostics(uri, timeout=30.0)
 
             # 3. Document Symbols (outline)
             print("\n[Document Symbols]")

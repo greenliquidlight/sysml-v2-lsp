@@ -204,17 +204,19 @@ export function validateKeywordsFromTokens(tokenStream: CommonTokenStream): Seri
         if (!positionOk) continue;
 
         const suggestion = findClosestKeyword(tok.text);
-        if (!suggestion) continue;
 
         const line = (tok.line ?? 1) - 1;
         const char = tok.column ?? 0;
+        const message = suggestion
+            ? `Unknown keyword '${tok.text}'. Did you mean '${suggestion}'?`
+            : `Unexpected identifier '${tok.text}' where a SysML keyword was expected.`;
         diagnostics.push({
             severity: 1, // DiagnosticSeverity.Error
             range: {
                 start: { line, character: char },
                 end: { line, character: char + tok.text.length },
             },
-            message: `Unknown keyword '${tok.text}'. Did you mean '${suggestion}'?`,
+            message,
             source: 'sysml',
         });
     }
@@ -495,14 +497,13 @@ export function flagUnknownIdentifiers(tokenStream: CommonTokenStream): Serializ
         // (another identifier, '}', or EOF — indicating it's not valid syntax).
         if (i + 1 < visible.length) {
             const next = visible[i + 1];
-            // If followed by ':', '=', '{', ':>', ':>>', 'def', ';' → 
+            // If followed by ':', '=', '{', ':>', ':>>', ';' →
             // this could be a valid usage name — skip
             if (next.type === SysMLv2Lexer.COLON ||
                 next.type === SysMLv2Lexer.EQ ||
                 next.type === SysMLv2Lexer.LBRACE ||
                 next.type === SysMLv2Lexer.COLON_GT ||
                 next.type === SysMLv2Lexer.COLON_GT_GT ||
-                next.type === SysMLv2Lexer.DEF ||
                 next.type === SysMLv2Lexer.SEMI ||
                 next.type === SysMLv2Lexer.LBRACK ||
                 // If followed by '::', this is a qualified name / namespace path

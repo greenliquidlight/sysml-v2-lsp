@@ -192,10 +192,13 @@ export function validateKeywords(result: ParseResult): Diagnostic[] {
         if (!looksLikeKeywordPosition(visibleTokens, i)) continue;
 
         const suggestion = findClosestKeyword(text);
-        if (!suggestion) continue;
 
         const line = (token.line ?? 1) - 1; // 0-based
         const char = token.column ?? 0;
+
+        const message = suggestion
+            ? `Unknown keyword '${text}'. Did you mean '${suggestion}'?`
+            : `Unexpected identifier '${text}' where a SysML keyword was expected.`;
 
         diagnostics.push({
             severity: DiagnosticSeverity.Error,
@@ -203,7 +206,7 @@ export function validateKeywords(result: ParseResult): Diagnostic[] {
                 start: { line, character: char },
                 end: { line, character: char + text.length },
             },
-            message: `Unknown keyword '${text}'. Did you mean '${suggestion}'?`,
+            message,
             source: 'sysml',
         });
     }
