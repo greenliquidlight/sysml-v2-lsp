@@ -7,9 +7,8 @@ import {
     CallHierarchyPrepareParams,
     SymbolKind,
     Range,
+    Position,
 } from 'vscode-languageserver/node.js';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { TextDocuments } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
 import { SymbolTable } from '../symbols/symbolTable.js';
 import { SysMLElementKind, SysMLSymbol } from '../symbols/sysmlElements.js';
@@ -22,19 +21,52 @@ const CALL_KEYWORDS = new Set([
 ]);
 
 /**
+ * Keywords whose typed usages (`action x : TypeDef`) represent calls.
+ */
+const USAGE_KEYWORDS = ['action', 'state', 'calc'];
+const USAGE_PATTERN = `(?:${USAGE_KEYWORDS.join('|')})`;
+
+/** Convert a text offset to a Position. */
+function offsetToPosition(text: string, offset: number): Position {
+    let line = 0;
+    let character = 0;
+    for (let i = 0; i < offset && i < text.length; i++) {
+        if (text[i] === '\n') {
+            line++;
+            character = 0;
+        } else {
+            character++;
+        }
+    }
+    return Position.create(line, character);
+}
+
+/** Convert a Position to a text offset. */
+function positionToOffset(text: string, pos: Position): number {
+    let currentLine = 0;
+    for (let i = 0; i < text.length; i++) {
+        if (currentLine === pos.line) {
+            return i + pos.character;
+        }
+        if (text[i] === '\n') {
+            currentLine++;
+        }
+    }
+    return text.length;
+}
+
+/**
  * Provides call hierarchy for SysML actions.
  *
  * Maps SysML concepts to call hierarchy:
- *  - "Calls" = perform, include (an action invoking other actions)
- *  - "Called by" = which actions perform/include this one
+ *  - "Calls" = perform, include, accept (explicit keywords)
+ *  - "Calls" = `action x : ActionDef` (typed usage = composition call)
+ *  - "Called by" = which actions perform/include/compose this one
  */
 export class CallHierarchyProvider {
     private symbolTable = new SymbolTable();
 
-    constructor(
-        private documentManager: DocumentManager,
-        private documents: TextDocuments<TextDocument>,
-    ) { }
+    constructor(private documentManager: DocumentManager) { }
 
     prepareCallHierarchy(params: CallHierarchyPrepareParams): CallHierarchyItem[] | null {
         const uri = params.textDocument.uri;
@@ -69,35 +101,51 @@ export class CallHierarchyProvider {
         const targetName = item.name;
         const incoming: CallHierarchyIncomingCall[] = [];
 
-        // Search all documents for references to this action
         for (const uri of this.documentManager.getUris()) {
-            const doc = this.documents.get(uri);
-            if (!doc) continue;
+            const text = this.documentManager.getText(uri);
+            if (!text) continue;
 
-            const text = doc.getText();
             const symbols = this.symbolTable.getSymbolsForUri(uri);
 
-            // Look for `perform <name>` or `include <name>` patterns
+            // 1. Explicit call keywords: `perform Brake`, `accept Accelerate`, etc.
             for (const keyword of CALL_KEYWORDS) {
                 const regex = new RegExp(`\\b${keyword}\\s+${this.escapeRegex(targetName)}\\b`, 'g');
                 let match: RegExpExecArray | null;
 
                 while ((match = regex.exec(text)) !== null) {
-                    // Find the enclosing action/state for this reference
-                    const pos = doc.positionAt(match.index);
+                    const pos = offsetToPosition(text, match.index);
                     const enclosing = this.findEnclosingBehavioral(symbols, pos.line);
 
                     if (enclosing) {
-                        const fromRange = Range.create(
-                            doc.positionAt(match.index),
-                            doc.positionAt(match.index + match[0].length),
-                        );
-
                         incoming.push({
                             from: this.toCallHierarchyItem(enclosing),
-                            fromRanges: [fromRange],
+                            fromRanges: [Range.create(
+                                pos,
+                                offsetToPosition(text, match.index + match[0].length),
+                            )],
                         });
                     }
+                }
+            }
+
+            // 2. Typed usages: `action foo : TargetName` — composition is a call.
+            //    skip=1 because the narrowest enclosing behavioral is the usage
+            //    itself; the actual *caller* is the parent action/state.
+            const usageRegex = new RegExp(
+                `\\b${USAGE_PATTERN}\\s+\\w+\\s*:\\s*${this.escapeRegex(targetName)}\\b`, 'g',
+            );
+            let match: RegExpExecArray | null;
+            while ((match = usageRegex.exec(text)) !== null) {
+                const pos = offsetToPosition(text, match.index);
+                const enclosing = this.findEnclosingBehavioral(symbols, pos.line, 1);
+                if (enclosing) {
+                    incoming.push({
+                        from: this.toCallHierarchyItem(enclosing),
+                        fromRanges: [Range.create(
+                            pos,
+                            offsetToPosition(text, match.index + match[0].length),
+                        )],
+                    });
                 }
             }
         }
@@ -109,10 +157,9 @@ export class CallHierarchyProvider {
         const item = params.item;
         this.buildAllSymbols();
 
-        const doc = this.documents.get(item.uri);
-        if (!doc) return [];
+        const fullText = this.documentManager.getText(item.uri);
+        if (!fullText) return [];
 
-        const text = doc.getText();
         const outgoing: CallHierarchyOutgoingCall[] = [];
 
         // Find the symbol body range
@@ -123,11 +170,11 @@ export class CallHierarchyProvider {
         );
         if (!sym) return [];
 
-        // Search within the symbol's range for call-keywords
-        const startOffset = doc.offsetAt(sym.range.start);
-        const endOffset = doc.offsetAt(sym.range.end);
-        const bodyText = text.slice(startOffset, endOffset);
+        const startOffset = positionToOffset(fullText, sym.range.start);
+        const endOffset = positionToOffset(fullText, sym.range.end);
+        const bodyText = fullText.slice(startOffset, endOffset);
 
+        // 1. Explicit call keywords: `perform Brake`, `accept Accelerate`, etc.
         for (const keyword of CALL_KEYWORDS) {
             const regex = new RegExp(`\\b${keyword}\\s+(\\w+)`, 'g');
             let match: RegExpExecArray | null;
@@ -138,16 +185,34 @@ export class CallHierarchyProvider {
 
                 if (targets.length > 0) {
                     const absOffset = startOffset + match.index;
-                    const fromRange = Range.create(
-                        doc.positionAt(absOffset),
-                        doc.positionAt(absOffset + match[0].length),
-                    );
-
                     outgoing.push({
                         to: this.toCallHierarchyItem(targets[0]),
-                        fromRanges: [fromRange],
+                        fromRanges: [Range.create(
+                            offsetToPosition(fullText, absOffset),
+                            offsetToPosition(fullText, absOffset + match[0].length),
+                        )],
                     });
                 }
+            }
+        }
+
+        // 2. Typed usages: `action foo : TypeDef` — composition is a call
+        const usageRegex = new RegExp(
+            `\\b${USAGE_PATTERN}\\s+\\w+\\s*:\\s*(\\w+)`, 'g',
+        );
+        let match: RegExpExecArray | null;
+        while ((match = usageRegex.exec(bodyText)) !== null) {
+            const calledName = match[1];
+            const targets = this.symbolTable.findByName(calledName);
+            if (targets.length > 0) {
+                const absOffset = startOffset + match.index;
+                outgoing.push({
+                    to: this.toCallHierarchyItem(targets[0]),
+                    fromRanges: [Range.create(
+                        offsetToPosition(fullText, absOffset),
+                        offsetToPosition(fullText, absOffset + match[0].length),
+                    )],
+                });
             }
         }
 
@@ -163,21 +228,18 @@ export class CallHierarchyProvider {
         }
     }
 
-    private findEnclosingBehavioral(symbols: SysMLSymbol[], line: number): SysMLSymbol | undefined {
-        let best: SysMLSymbol | undefined;
-        let bestSize = Infinity;
+    private findEnclosingBehavioral(symbols: SysMLSymbol[], line: number, skip = 0): SysMLSymbol | undefined {
+        const candidates: { sym: SysMLSymbol; size: number }[] = [];
 
         for (const sym of symbols) {
             const r = sym.range;
             if (line >= r.start.line && line <= r.end.line) {
-                const size = r.end.line - r.start.line;
-                if (size < bestSize) {
-                    best = sym;
-                    bestSize = size;
-                }
+                candidates.push({ sym, size: r.end.line - r.start.line });
             }
         }
-        return best;
+
+        candidates.sort((a, b) => a.size - b.size);
+        return candidates[skip]?.sym;
     }
 
     private toCallHierarchyItem(sym: SysMLSymbol): CallHierarchyItem {

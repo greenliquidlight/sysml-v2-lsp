@@ -154,7 +154,8 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT, SysMLv2Lexer.COLON_COLON,
     SysMLv2Lexer.ACTOR, SysMLv2Lexer.STAKEHOLDER, SysMLv2Lexer.SUBJECT,
     SysMLv2Lexer.VARIANT, SysMLv2Lexer.REF, SysMLv2Lexer.SNAPSHOT,
-    SysMLv2Lexer.TIMESLICE,
+    SysMLv2Lexer.TIMESLICE, SysMLv2Lexer.END, SysMLv2Lexer.IN,
+    SysMLv2Lexer.OUT, SysMLv2Lexer.INOUT,
 ]);
 
 interface SerializedDiagnostic {
@@ -164,7 +165,7 @@ interface SerializedDiagnostic {
     source: string;
 }
 
-function validateKeywordsFromTokens(tokenStream: CommonTokenStream): SerializedDiagnostic[] {
+export function validateKeywordsFromTokens(tokenStream: CommonTokenStream): SerializedDiagnostic[] {
     const diagnostics: SerializedDiagnostic[] = [];
     tokenStream.fill();
     const allTokens = tokenStream.getTokens();
@@ -428,7 +429,7 @@ const STATEMENT_START_KEYWORDS: ReadonlySet<string> = new Set([
  * is expected. These are words like "banana" that aren't close enough to any
  * keyword to trigger the typo detector, yet clearly don't belong.
  */
-function flagUnknownIdentifiers(tokenStream: CommonTokenStream): SerializedDiagnostic[] {
+export function flagUnknownIdentifiers(tokenStream: CommonTokenStream): SerializedDiagnostic[] {
     const diagnostics: SerializedDiagnostic[] = [];
     tokenStream.fill();
     const allTokens = tokenStream.getTokens();

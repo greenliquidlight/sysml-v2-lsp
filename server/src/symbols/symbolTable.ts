@@ -188,6 +188,44 @@ export class SymbolTable {
         return this.findByName(name);
     }
 
+    /**
+     * Find all text occurrences of an identifier in a document.
+     * Returns Location-style objects for every whole-word match,
+     * covering both declarations and usage references (e.g. type
+     * annotations like `action adjustWheels : AdjustWheelAngle`).
+     */
+    findTextReferences(
+        name: string,
+        uri: string,
+        text: string,
+    ): { uri: string; range: Range }[] {
+        const results: { uri: string; range: Range }[] = [];
+        // Escape regex special chars in name, then match as whole word.
+        // Also handle unrestricted (quoted) names: 'Some Name'
+        const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = new RegExp(`(?<![a-zA-Z0-9_])${escaped}(?![a-zA-Z0-9_])`, 'g');
+        const lines = text.split('\n');
+
+        for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+            const lineText = lines[lineIdx];
+            let m: RegExpExecArray | null;
+            while ((m = pattern.exec(lineText)) !== null) {
+                // Skip matches inside comments
+                const before = lineText.slice(0, m.index);
+                if (before.includes('//') || before.includes('/*')) continue;
+
+                results.push({
+                    uri,
+                    range: {
+                        start: { line: lineIdx, character: m.index },
+                        end: { line: lineIdx, character: m.index + name.length },
+                    },
+                });
+            }
+        }
+        return results;
+    }
+
     // --------------------------------------------------------------------------
     // Private tree-walking
     // --------------------------------------------------------------------------

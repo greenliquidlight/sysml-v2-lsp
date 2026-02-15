@@ -5,10 +5,26 @@
 ### Added
 
 - Python LSP client example in `clients/python/` — zero-dependency script demonstrating how to drive the SysML v2 language server from Python over JSON-RPC/stdio, using the same server as VS Code
+- `sysml.inlayHints.enabled` VS Code setting — allows users to toggle inlay hints on/off (default: true). Server-side gating returns empty results when disabled
+- Extension Development Host settings (`examples/.vscode/settings.json`) — disables inlay hints during F5 testing
+- Code completion provider tests — ensures keyword completions, snippet insert text, and resolve are covered
+- Call hierarchy typed-usage detection — `action x : TypeDef`, `state x : TypeDef`, and `calc x : TypeDef` composition patterns are now recognised as outgoing/incoming calls, not just explicit `perform`/`include`/`accept` keywords
 
 ### Changed
 
 - Reorganise folder structure: `client/` → `clients/vscode/`, Python client at `clients/python/`
+- Call hierarchy provider no longer depends on `TextDocuments` — uses `DocumentManager` for all text access, simplifying the architecture
+- `DocumentManager.getUris()` now returns all open documents (from `TextDocuments.all()`), not just cached ones — fixes providers that scan across documents (call hierarchy, references, code lens)
+- Suppress esbuild size warnings — custom build summary replaces default output to avoid misleading ⚠️ indicators on the expected 1.4 MB ANTLR parser bundle
+
+### Fixed
+
+- Fix `end` keyword in connection/interface definitions causing false positive diagnostics — identifiers after `end` (e.g., `end source : PowerPort;`) were incorrectly flagged as keyword typos
+- Fix `in`/`out`/`inout` direction keywords causing false positive diagnostics — identifiers after `in`, `out`, `inout` (e.g., `out arrived : Boolean`) were incorrectly flagged as keyword typos
+- Fix Find References only returning declarations — added text-based reference scanning (`findTextReferences`) across all open documents to find usage-site references (e.g., `action adjustWheels : AdjustWheelAngle`)
+- Fix CodeLens reference counts only counting declarations — now uses text-based scanning consistent with Find References
+- Remove redundant `activationEvents` from `package.json` — VS Code auto-generates from `contributes.languages`
+- Remove unnecessary `sysml.inlayHints.enabled` from dev workspace settings (only needed in Extension Development Host)
 
 ## [0.1.4]
 

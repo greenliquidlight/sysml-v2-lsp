@@ -7,6 +7,11 @@ import { SymbolTable } from '../symbols/symbolTable.js';
 
 /**
  * Provides find-all-references for SysML elements.
+ *
+ * Scans document text for all whole-word occurrences of the target
+ * identifier, so both declarations and type/usage references are found
+ * (e.g. `action adjustWheels : AdjustWheelAngle` surfaces as a
+ * reference to `AdjustWheelAngle`).
  */
 export class ReferencesProvider {
     private symbolTable = new SymbolTable();
@@ -37,20 +42,40 @@ export class ReferencesProvider {
             return [];
         }
 
-        // Find all references
-        const references = this.symbolTable.findReferences(symbol.name);
+        // Scan all open documents for text references to this name
         const locations: Location[] = [];
+        const seen = new Set<string>();
 
-        for (const ref of references) {
-            locations.push({
-                uri: ref.uri,
-                range: ref.selectionRange,
-            });
-        }
+        for (const uri of this.documentManager.getUris()) {
+            const docText = this.documentManager.getText(uri);
+            if (!docText) continue;
 
-        // Include the definition itself if requested
-        if (params.context.includeDeclaration) {
-            // Already included through findReferences
+            // Build symbol table for cross-file documents so the
+            // text-reference scanner is available for each URI
+            const docResult = this.documentManager.get(uri);
+            if (docResult) {
+                this.symbolTable.build(uri, docResult);
+            }
+
+            const refs = this.symbolTable.findTextReferences(symbol.name, uri, docText);
+            for (const ref of refs) {
+                const key = `${ref.uri}:${ref.range.start.line}:${ref.range.start.character}`;
+                if (seen.has(key)) continue;
+                seen.add(key);
+
+                // Optionally skip the declaration itself
+                if (!params.context.includeDeclaration) {
+                    if (
+                        ref.uri === symbol.uri &&
+                        ref.range.start.line === symbol.selectionRange.start.line &&
+                        ref.range.start.character === symbol.selectionRange.start.character
+                    ) {
+                        continue;
+                    }
+                }
+
+                locations.push({ uri: ref.uri, range: ref.range });
+            }
         }
 
         return locations;

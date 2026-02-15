@@ -10,7 +10,9 @@ const baseConfig = {
     sourcemap: !isProduction,
     platform: 'node',
     target: 'node20',
-    logLevel: 'info',
+    // Suppress default output — the ANTLR4 generated parser is ~1.4 MB,
+    // which triggers esbuild's ⚠️ size indicator.  We print our own summary.
+    logLevel: 'warning',
 };
 
 // Bundle the server (ESM — server/package.json has "type": "module")
@@ -63,5 +65,29 @@ const clientBuild = esbuild.build({
     external: ['vscode'],
 });
 
-await Promise.all([serverBuild, workerBuild, mcpBuild, clientBuild]);
-console.log(isProduction ? '✅ Production build complete' : '✅ Build complete');
+const results = await Promise.all([serverBuild, workerBuild, mcpBuild, clientBuild]);
+
+// Print a clean build summary with file sizes
+import { statSync } from 'node:fs';
+const outputs = [
+    'dist/server/server.mjs',
+    'dist/server/parser/parseWorker.mjs',
+    'dist/server/mcpServer.mjs',
+    'dist/client/extension.js',
+];
+const fmt = (bytes) => bytes < 1024 * 1024
+    ? `${(bytes / 1024).toFixed(1)}kb`
+    : `${(bytes / (1024 * 1024)).toFixed(1)}mb`;
+const pad = (s, n) => s + ' '.repeat(Math.max(0, n - s.length));
+for (const f of outputs) {
+    try {
+        const size = statSync(f).size;
+        console.log(`  ${pad(f, 44)} ${fmt(size)}`);
+    } catch { /* skip if not generated */ }
+}
+
+const warnings = results.flatMap(r => r.warnings ?? []);
+if (warnings.length) {
+    console.log(`\n⚠️  ${warnings.length} warning(s)`);
+}
+console.log(isProduction ? '\n✅ Production build complete' : '\n✅ Build complete');

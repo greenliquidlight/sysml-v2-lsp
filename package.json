@@ -39,9 +39,6 @@
     "access": "public"
   },
   "main": "./dist/client/extension.js",
-  "activationEvents": [
-    "onLanguage:sysml"
-  ],
   "contributes": {
     "commands": [
       {
@@ -83,6 +80,12 @@
           "type": "number",
           "default": 100,
           "description": "Maximum number of problems reported per file."
+        },
+        "sysml.inlayHints.enabled": {
+          "scope": "window",
+          "type": "boolean",
+          "default": true,
+          "description": "Enable or disable inlay hints (ghost text showing inferred types and supertypes)."
         },
         "sysml.library.path": {
           "scope": "resource",

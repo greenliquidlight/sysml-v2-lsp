@@ -94,10 +94,20 @@ export class DocumentManager {
     }
 
     /**
-     * Get all cached URIs.
+     * Get all known URIs — both cached and currently open documents.
      */
     getUris(): string[] {
-        return Array.from(this.cache.keys());
+        const uris = new Set(this.cache.keys());
+
+        // Include all open documents from the LSP TextDocuments collection,
+        // even if they haven't been lazily parsed on the main thread yet.
+        if (this.documents) {
+            for (const doc of this.documents.all()) {
+                uris.add(doc.uri);
+            }
+        }
+
+        return Array.from(uris);
     }
 }
 

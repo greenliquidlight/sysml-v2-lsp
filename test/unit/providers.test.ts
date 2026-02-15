@@ -465,7 +465,7 @@ describe('Call Hierarchy Provider', () => {
         const brakeSym = st.findByName('Brake')[0];
         expect(brakeSym).toBeDefined();
 
-        const provider = new CallHierarchyProvider(dm, mockDocs([doc]));
+        const provider = new CallHierarchyProvider(dm);
         const items = provider.prepareCallHierarchy({
             textDocument: { uri: doc.uri },
             position: {
@@ -489,7 +489,7 @@ describe('Call Hierarchy Provider', () => {
         const brakeSym = st.findByName('Brake')[0];
         expect(brakeSym).toBeDefined();
 
-        const provider = new CallHierarchyProvider(dm, mockDocs([doc]));
+        const provider = new CallHierarchyProvider(dm);
         const items = provider.prepareCallHierarchy({
             textDocument: { uri: doc.uri },
             position: {
@@ -514,7 +514,7 @@ describe('Call Hierarchy Provider', () => {
         const esSym = st.findByName('EmergencyStop')[0];
         expect(esSym).toBeDefined();
 
-        const provider = new CallHierarchyProvider(dm, mockDocs([doc]));
+        const provider = new CallHierarchyProvider(dm);
         const items = provider.prepareCallHierarchy({
             textDocument: { uri: doc.uri },
             position: {
@@ -538,7 +538,7 @@ describe('Call Hierarchy Provider', () => {
         const vehicleSym = st.findByName('Vehicle')[0];
         expect(vehicleSym).toBeDefined();
 
-        const provider = new CallHierarchyProvider(dm, mockDocs([doc]));
+        const provider = new CallHierarchyProvider(dm);
         const items = provider.prepareCallHierarchy({
             textDocument: { uri: doc.uri },
             position: {
@@ -553,12 +553,85 @@ describe('Call Hierarchy Provider', () => {
         const { CallHierarchyProvider } = await import('../../server/src/providers/callHierarchyProvider.js');
         const { DocumentManager } = await import('../../server/src/documentManager.js');
 
-        const provider = new CallHierarchyProvider(new DocumentManager(), mockDocs([]));
+        const provider = new CallHierarchyProvider(new DocumentManager());
         const result = provider.prepareCallHierarchy({
             textDocument: { uri: 'test://unknown.sysml' },
             position: { line: 0, character: 0 },
         });
         expect(result).toBeNull();
+    });
+
+    it('should detect typed action usages as outgoing calls', async () => {
+        const { CallHierarchyProvider } = await import('../../server/src/providers/callHierarchyProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+        const compositionText = `
+package Pipeline {
+    action def StepA { attribute x : Real; }
+    action def StepB { attribute y : Real; }
+    action mainFlow {
+        first start;
+        then action a : StepA { }
+        then action b : StepB { }
+        then done;
+    }
+}
+`;
+        const { dm, doc } = await setup(compositionText);
+
+        const st = new SymbolTable();
+        st.build(doc.uri, dm.get(doc.uri)!);
+        const mainSym = st.findByName('mainFlow')[0];
+        expect(mainSym).toBeDefined();
+
+        const provider = new CallHierarchyProvider(dm);
+        const items = provider.prepareCallHierarchy({
+            textDocument: { uri: doc.uri },
+            position: {
+                line: mainSym.selectionRange.start.line,
+                character: mainSym.selectionRange.start.character,
+            },
+        });
+        expect(items).not.toBeNull();
+
+        const outgoing = provider.provideOutgoingCalls({ item: items![0] });
+        const names = outgoing.map(o => o.to.name);
+        expect(names).toContain('StepA');
+        expect(names).toContain('StepB');
+    });
+
+    it('should detect typed action usages as incoming calls', async () => {
+        const { CallHierarchyProvider } = await import('../../server/src/providers/callHierarchyProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+        const compositionText = `
+package Pipeline {
+    action def StepA { attribute x : Real; }
+    action mainFlow {
+        first start;
+        then action a : StepA { }
+        then done;
+    }
+}
+`;
+        const { dm, doc } = await setup(compositionText);
+
+        const st = new SymbolTable();
+        st.build(doc.uri, dm.get(doc.uri)!);
+        const stepASym = st.findByName('StepA')[0];
+        expect(stepASym).toBeDefined();
+
+        const provider = new CallHierarchyProvider(dm);
+        const items = provider.prepareCallHierarchy({
+            textDocument: { uri: doc.uri },
+            position: {
+                line: stepASym.selectionRange.start.line,
+                character: stepASym.selectionRange.start.character,
+            },
+        });
+        expect(items).not.toBeNull();
+
+        const incoming = provider.provideIncomingCalls({ item: items![0] });
+        expect(incoming.length).toBeGreaterThan(0);
+        expect(incoming[0].from.name).toBe('mainFlow');
     });
 });
 
@@ -996,6 +1069,53 @@ describe('Folding Range Provider', () => {
 // ===================================================================
 // Diagnostics Provider
 // ===================================================================
+
+describe('Completion Provider', () => {
+    it('should return SysML keyword completions', async () => {
+        const { CompletionProvider } = await import('../../server/src/providers/completionProvider.js');
+        const { dm } = await setup(VEHICLE_TEXT);
+
+        const provider = new CompletionProvider(dm);
+        const items = provider.provideCompletions({
+            textDocument: { uri: 'test://test.sysml' },
+            position: { line: 1, character: 4 },
+        });
+
+        expect(items.length).toBeGreaterThan(0);
+        const labels = items.map(i => i.label);
+        expect(labels).toContain('part def');
+        expect(labels).toContain('action def');
+        expect(labels).toContain('package');
+        expect(labels).toContain('import');
+    });
+
+    it('should include snippet insert text for definitions', async () => {
+        const { CompletionProvider } = await import('../../server/src/providers/completionProvider.js');
+        const { InsertTextFormat } = await import('vscode-languageserver/node.js');
+        const { dm } = await setup(VEHICLE_TEXT);
+
+        const provider = new CompletionProvider(dm);
+        const items = provider.provideCompletions({
+            textDocument: { uri: 'test://test.sysml' },
+            position: { line: 0, character: 0 },
+        });
+
+        const partDef = items.find(i => i.label === 'part def');
+        expect(partDef).toBeDefined();
+        expect(partDef!.insertText).toContain('part def');
+        expect(partDef!.insertTextFormat).toBe(InsertTextFormat.Snippet);
+    });
+
+    it('should resolve a completion item unchanged', async () => {
+        const { CompletionProvider } = await import('../../server/src/providers/completionProvider.js');
+        const { dm } = await setup(VEHICLE_TEXT);
+
+        const provider = new CompletionProvider(dm);
+        const item = { label: 'part def', kind: 6, data: 'part def' };
+        const resolved = provider.resolveCompletion(item as any);
+        expect(resolved.label).toBe('part def');
+    });
+});
 
 describe('Diagnostics Provider', () => {
     it('should generate diagnostics from parse errors', async () => {

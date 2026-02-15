@@ -57,6 +57,13 @@ export class CodeLensProvider {
     }
 
     private countReferences(sym: SysMLSymbol): number {
-        return this.symbolTable.findReferences(sym.name).length;
+        // Count text occurrences across all open documents (declarations + usages)
+        let count = 0;
+        for (const uri of this.documentManager.getUris()) {
+            const text = this.documentManager.getText(uri);
+            if (!text) continue;
+            count += this.symbolTable.findTextReferences(sym.name, uri, text).length;
+        }
+        return count;
     }
 }

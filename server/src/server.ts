@@ -108,7 +108,7 @@ const linkedEditingRangeProvider = new LinkedEditingRangeProvider(documentManage
 const inlayHintProvider = new InlayHintProvider(documentManager);
 const documentLinkProvider = new DocumentLinkProvider(documentManager, documents);
 const typeHierarchyProvider = new TypeHierarchyProvider(documentManager);
-const callHierarchyProvider = new CallHierarchyProvider(documentManager, documents);
+const callHierarchyProvider = new CallHierarchyProvider(documentManager);
 const signatureHelpProvider = new SignatureHelpProvider(documentManager, documents);
 
 // ---------------------------------------------------------------------------
@@ -214,6 +214,20 @@ function cancelWorkerParse(id: number): void {
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
+
+// Cached settings
+interface SysMLSettings {
+    inlayHintsEnabled: boolean;
+}
+let settings: SysMLSettings = { inlayHintsEnabled: true };
+
+async function fetchSettings(): Promise<void> {
+    if (!hasConfigurationCapability) return;
+    const config = await connection.workspace.getConfiguration('sysml');
+    settings = {
+        inlayHintsEnabled: config?.inlayHints?.enabled ?? true,
+    };
+}
 
 // --------------------------------------------------------------------------
 // Lifecycle
@@ -333,11 +347,21 @@ connection.onInitialized(() => {
         );
     }
     connection.console.log('SysML v2 Language Server initialized');
+    fetchSettings();
 
     // Start the worker immediately to begin DFA warm-up in the background.
     // By the time the user opens a large file, the DFA should be warm.
     getParseWorker();
     connection.console.log('[worker] started — warming DFA in background...');
+});
+
+// --------------------------------------------------------------------------
+// Configuration changes
+// --------------------------------------------------------------------------
+
+connection.onDidChangeConfiguration((_change) => {
+    fetchSettings();
+    connection.console.log('[config] settings refreshed');
 });
 
 // --------------------------------------------------------------------------
@@ -605,6 +629,7 @@ connection.languages.onLinkedEditingRange(
 
 connection.languages.inlayHint.on(
     (params: InlayHintParams): InlayHint[] => {
+        if (!settings.inlayHintsEnabled) return [];
         return inlayHintProvider.provideInlayHints(params);
     }
 );
