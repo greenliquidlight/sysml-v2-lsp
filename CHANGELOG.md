@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.5]
+
+### Added
+
+- Python LSP client example in `clients/python/` — zero-dependency script demonstrating how to drive the SysML v2 language server from Python over JSON-RPC/stdio, using the same server as VS Code
+
+### Changed
+
+- Reorganise folder structure: `client/` → `clients/vscode/`, Python client at `clients/python/`
+
 ## [0.1.4]
 
 ### Added

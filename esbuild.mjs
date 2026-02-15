@@ -58,7 +58,7 @@ const mcpBuild = esbuild.build({
 const clientBuild = esbuild.build({
     ...baseConfig,
     format: 'cjs',
-    entryPoints: ['client/src/extension.ts'],
+    entryPoints: ['clients/vscode/src/extension.ts'],
     outfile: 'dist/client/extension.js',
     external: ['vscode'],
 });

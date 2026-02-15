@@ -5,7 +5,7 @@ export default tseslint.config(
     eslint.configs.recommended,
     ...tseslint.configs.recommended,
     {
-        files: ["client/src/**/*.ts", "server/src/**/*.ts"],
+        files: ["clients/vscode/src/**/*.ts", "server/src/**/*.ts"],
         rules: {
             "@typescript-eslint/no-unused-vars": [
                 "warn",
@@ -20,7 +20,7 @@ export default tseslint.config(
             "dist/**",
             "out/**",
             "server/out/**",
-            "client/out/**",
+            "clients/vscode/out/**",
             "server/src/generated/**",
             "server/src/parser/benchmark-warmup.ts",
             "**/*.js",

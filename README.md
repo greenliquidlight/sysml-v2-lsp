@@ -169,8 +169,8 @@ Build the server, then point your editor's LSP client at it:
 
 ```bash
 npm install && npm run build
-# Server binary: dist/server/server.js
-# Start with: node dist/server/server.js --stdio
+# Server binary: dist/server/server.mjs
+# Start with: node dist/server/server.mjs --stdio
 ```
 
 **Neovim** (via [nvim-lspconfig](https://github.com/neovim/nvim-lspconfig)):
@@ -178,7 +178,7 @@ npm install && npm run build
 ```lua
 vim.lsp.start({
   name = 'sysml',
-  cmd = { 'node', '/path/to/sysml-v2-lsp/dist/server/server.js', '--stdio' },
+  cmd = { 'node', '/path/to/sysml-v2-lsp/dist/server/server.mjs', '--stdio' },
   filetypes = { 'sysml' },
 })
 ```
@@ -189,10 +189,21 @@ vim.lsp.start({
 (lsp-register-client
   (make-lsp-client
     :new-connection (lsp-stdio-connection
-                     '("node" "/path/to/sysml-v2-lsp/dist/server/server.js" "--stdio"))
+                     '("node" "/path/to/sysml-v2-lsp/dist/server/server.mjs" "--stdio"))
     :activation-fn (lsp-activate-on "sysml")
     :server-id 'sysml-lsp))
 ```
+
+**Python** — A zero-dependency Python LSP client is included in [`clients/python/`](clients/python/):
+
+```bash
+cd clients/python
+python3 sysml_lsp_client.py                       # analyse all example files
+python3 sysml_lsp_client.py ../../examples/vehicle-model.sysml  # specific file
+```
+
+This demonstrates that the same LSP server used by VS Code can be driven from
+any language — see the [Python client README](clients/python/README.md) for details.
 
 ### Using the MCP Server
 
@@ -247,8 +258,11 @@ sysml-v2-lsp/
 │       ├── parser/             # ANTLR4 parse pipeline + worker thread
 │       ├── symbols/            # Symbol table, scopes, element types
 │       └── providers/          # 21 LSP feature implementations
-├── client/                 # VS Code Language Client extension
-│   └── src/extension.ts        # Starts LanguageClient, registers language
+├── clients/                # LSP client implementations
+│   ├── vscode/                 # VS Code Language Client extension
+│   │   └── src/extension.ts        # Starts LanguageClient, registers language
+│   └── python/                 # Python LSP client demo (zero dependencies)
+│       └── sysml_lsp_client.py
 ├── grammar/                # ANTLR4 grammar files (.g4)
 ├── examples/               # Sample SysML models
 ├── test/                   # Unit tests (vitest)
