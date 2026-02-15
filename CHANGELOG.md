@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6]
+
+### Fixed
+
+- Fix keyword validator silently ignoring extreme typos (e.g., `pasddsafart def Vehicle`) — identifiers in keyword positions are now flagged even when no close keyword match exists (Levenshtein distance > 2), with a generic "Unexpected identifier" message instead of requiring a "Did you mean?" suggestion
+- Fix `flagUnknownIdentifiers` incorrectly skipping identifiers followed by `def` — valid keywords before `def` (`part`, `action`, etc.) have their own token types, so an IDENTIFIER before `def` is always invalid
+- Fix Python LSP client missing diagnostics on first run — `drain_notifications` used a fixed 2-second timeout, but DFA warm-up on first server start takes ~15-20s. Added `drain_until_diagnostics()` which waits up to 30s and stops as soon as diagnostics arrive
+
 ## [0.1.5]
 
 ### Added
