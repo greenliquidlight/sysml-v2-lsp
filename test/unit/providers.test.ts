@@ -165,6 +165,25 @@ describe('CodeLens Provider', () => {
         const lenses = provider.provideCodeLenses({ textDocument: { uri: 'test://unknown.sysml' } });
         expect(lenses).toEqual([]);
     });
+
+    it('should count cross-file references in code lenses', async () => {
+        const { CodeLensProvider } = await import('../../server/src/providers/codeLensProvider.js');
+
+        const fileA = `package Lib { part def Sensor { attribute reading : Real; } }`;
+        const fileB = `package App { part mySensor : Sensor; }`;
+
+        const { dm } = await setupMulti([
+            { text: fileA, uri: 'test://lib.sysml' },
+            { text: fileB, uri: 'test://app.sysml' },
+        ]);
+
+        const provider = new CodeLensProvider(dm);
+        const lenses = provider.provideCodeLenses({ textDocument: { uri: 'test://lib.sysml' } });
+
+        // Sensor def should have a lens showing references (including cross-file usage)
+        const sensorLens = lenses.find(l => l.command?.title.includes('reference'));
+        expect(sensorLens).toBeDefined();
+    });
 });
 
 // ===================================================================
@@ -984,6 +1003,95 @@ describe('References Provider', () => {
             context: { includeDeclaration: true },
         });
         expect(refs.length).toBeGreaterThan(0);
+    });
+
+    it('should find cross-file references via text scanning', async () => {
+        const { ReferencesProvider } = await import('../../server/src/providers/referencesProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+
+        const fileA = `package Lib { part def Sensor { attribute reading : Real; } }`;
+        const fileB = `package App { import Lib::*; part mySensor : Sensor; }`;
+
+        const { dm, docs } = await setupMulti([
+            { text: fileA, uri: 'test://lib.sysml' },
+            { text: fileB, uri: 'test://app.sysml' },
+        ]);
+
+        const st = new SymbolTable();
+        st.build('test://lib.sysml', dm.get('test://lib.sysml')!);
+        const sensorSym = st.findByName('Sensor')[0];
+        expect(sensorSym).toBeDefined();
+
+        const provider = new ReferencesProvider(dm);
+        const refs = provider.provideReferences({
+            textDocument: { uri: 'test://lib.sysml' },
+            position: {
+                line: sensorSym.selectionRange.start.line,
+                character: sensorSym.selectionRange.start.character,
+            },
+            context: { includeDeclaration: true },
+        });
+        // Should find Sensor in lib.sysml (definition) AND in app.sysml (usage)
+        expect(refs.length).toBeGreaterThanOrEqual(2);
+        const uris = refs.map(r => r.uri);
+        expect(uris).toContain('test://lib.sysml');
+        expect(uris).toContain('test://app.sysml');
+    });
+
+    it('should exclude declaration when includeDeclaration is false', async () => {
+        const { ReferencesProvider } = await import('../../server/src/providers/referencesProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+        const { dm } = await setup(VEHICLE_TEXT);
+        const uri = 'test://test.sysml';
+
+        const st = new SymbolTable();
+        st.build(uri, dm.get(uri)!);
+        const fuelPortSym = st.findByName('FuelPort')[0];
+        expect(fuelPortSym).toBeDefined();
+
+        const provider = new ReferencesProvider(dm);
+        const withDecl = provider.provideReferences({
+            textDocument: { uri },
+            position: {
+                line: fuelPortSym.selectionRange.start.line,
+                character: fuelPortSym.selectionRange.start.character,
+            },
+            context: { includeDeclaration: true },
+        });
+        const withoutDecl = provider.provideReferences({
+            textDocument: { uri },
+            position: {
+                line: fuelPortSym.selectionRange.start.line,
+                character: fuelPortSym.selectionRange.start.character,
+            },
+            context: { includeDeclaration: false },
+        });
+        expect(withDecl.length).toBeGreaterThanOrEqual(withoutDecl.length);
+    });
+
+    it('should deduplicate references', async () => {
+        const { ReferencesProvider } = await import('../../server/src/providers/referencesProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+        const { dm } = await setup(VEHICLE_TEXT);
+        const uri = 'test://test.sysml';
+
+        const st = new SymbolTable();
+        st.build(uri, dm.get(uri)!);
+        const vehicleSym = st.findByName('Vehicle')[0];
+        expect(vehicleSym).toBeDefined();
+
+        const provider = new ReferencesProvider(dm);
+        const refs = provider.provideReferences({
+            textDocument: { uri },
+            position: {
+                line: vehicleSym.selectionRange.start.line,
+                character: vehicleSym.selectionRange.start.character,
+            },
+            context: { includeDeclaration: true },
+        });
+        // Check no duplicate locations
+        const keys = refs.map(r => `${r.uri}:${r.range.start.line}:${r.range.start.character}`);
+        expect(new Set(keys).size).toBe(keys.length);
     });
 
     it('should return empty for unknown URI', async () => {

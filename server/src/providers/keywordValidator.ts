@@ -1,5 +1,5 @@
-import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node.js';
 import { Token } from 'antlr4ng';
+import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node.js';
 import { SysMLv2Lexer } from '../generated/SysMLv2Lexer.js';
 import { ParseResult } from '../parser/parseDocument.js';
 
@@ -101,10 +101,16 @@ const KEYWORD_CONTINUATIONS: ReadonlySet<number> = new Set([
 ]);
 
 /**
- * Token types that are definition keywords — when one of these precedes
- * an identifier, that identifier is a user-defined name, not a keyword typo.
+ * Token types that, when they precede an identifier, indicate the
+ * identifier is a user-defined name — not a keyword typo.
+ *
+ * Derived from the SysML v2 grammar (formal-25-09-03):  every production
+ * rule where a keyword or punctuation token directly precedes
+ * an `identification`, `featureDeclaration`, `usageDeclaration`,
+ * `qualifiedName`, or `ownedReferenceSubsetting`.
  */
 const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
+    // ── SysML definition/usage element keywords ──
     SysMLv2Lexer.PART, SysMLv2Lexer.PORT, SysMLv2Lexer.ITEM,
     SysMLv2Lexer.ATTRIBUTE, SysMLv2Lexer.ACTION, SysMLv2Lexer.CALC,
     SysMLv2Lexer.STATE, SysMLv2Lexer.CONSTRAINT, SysMLv2Lexer.REQUIREMENT,
@@ -114,11 +120,84 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.NAMESPACE, SysMLv2Lexer.ENUM, SysMLv2Lexer.ALLOCATION,
     SysMLv2Lexer.CONNECTION, SysMLv2Lexer.INTERFACE, SysMLv2Lexer.OCCURRENCE,
     SysMLv2Lexer.INDIVIDUAL, SysMLv2Lexer.FLOW, SysMLv2Lexer.SUCCESSION,
-    SysMLv2Lexer.BINDING, SysMLv2Lexer.DEF, SysMLv2Lexer.COLON,
-    SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT, SysMLv2Lexer.COLON_COLON,
+    SysMLv2Lexer.BINDING, SysMLv2Lexer.MESSAGE, SysMLv2Lexer.TRANSITION,
+
+    // ── KerML element keywords ──
+    SysMLv2Lexer.TYPE, SysMLv2Lexer.CLASSIFIER, SysMLv2Lexer.DATATYPE,
+    SysMLv2Lexer.CLASS, SysMLv2Lexer.STRUCT, SysMLv2Lexer.ASSOC,
+    SysMLv2Lexer.METACLASS, SysMLv2Lexer.INTERACTION, SysMLv2Lexer.BEHAVIOR,
+    SysMLv2Lexer.FUNCTION, SysMLv2Lexer.PREDICATE, SysMLv2Lexer.FEATURE,
+    SysMLv2Lexer.CONNECTOR, SysMLv2Lexer.STEP, SysMLv2Lexer.EXPR,
+    SysMLv2Lexer.BOOL, SysMLv2Lexer.INV, SysMLv2Lexer.MULTIPLICITY,
+
+    // ── Annotation / membership keywords ──
+    SysMLv2Lexer.ALIAS, SysMLv2Lexer.COMMENT, SysMLv2Lexer.DOC,
+    SysMLv2Lexer.REP, SysMLv2Lexer.DEPENDENCY, SysMLv2Lexer.IMPORT,
+
+    // ── Keyword + DEF / keyword modifiers ──
+    SysMLv2Lexer.DEF, SysMLv2Lexer.REF, SysMLv2Lexer.ALL,
+
+    // ── Feature prefix / visibility modifiers ──
+    SysMLv2Lexer.ABSTRACT, SysMLv2Lexer.VARIATION, SysMLv2Lexer.DERIVED,
+    SysMLv2Lexer.COMPOSITE, SysMLv2Lexer.CONST, SysMLv2Lexer.CONSTANT,
+    SysMLv2Lexer.VAR, SysMLv2Lexer.MEMBER, SysMLv2Lexer.RETURN,
+    SysMLv2Lexer.PUBLIC, SysMLv2Lexer.PRIVATE, SysMLv2Lexer.PROTECTED,
+
+    // ── Directionality ──
+    SysMLv2Lexer.IN, SysMLv2Lexer.OUT, SysMLv2Lexer.INOUT,
+    SysMLv2Lexer.END,
+
+    // ── Actor / role keywords ──
     SysMLv2Lexer.ACTOR, SysMLv2Lexer.STAKEHOLDER, SysMLv2Lexer.SUBJECT,
-    SysMLv2Lexer.VARIANT, SysMLv2Lexer.REF, SysMLv2Lexer.SNAPSHOT,
-    SysMLv2Lexer.TIMESLICE,
+    SysMLv2Lexer.VARIANT, SysMLv2Lexer.SNAPSHOT, SysMLv2Lexer.TIMESLICE,
+
+    // ── Action control node keywords ──
+    SysMLv2Lexer.FORK, SysMLv2Lexer.JOIN, SysMLv2Lexer.MERGE,
+    SysMLv2Lexer.DECIDE,
+
+    // ── Reference-preceding keywords (perform x, exhibit x, …) ──
+    SysMLv2Lexer.PERFORM, SysMLv2Lexer.EXHIBIT, SysMLv2Lexer.INCLUDE,
+    SysMLv2Lexer.SATISFY, SysMLv2Lexer.ASSERT, SysMLv2Lexer.VERIFY,
+    SysMLv2Lexer.RENDER, SysMLv2Lexer.CONNECT, SysMLv2Lexer.ALLOCATE,
+    SysMLv2Lexer.BIND, SysMLv2Lexer.EXPOSE, SysMLv2Lexer.EVENT,
+
+    // ── Succession / flow keywords ──
+    SysMLv2Lexer.FIRST, SysMLv2Lexer.THEN, SysMLv2Lexer.TO,
+    SysMLv2Lexer.FROM,
+
+    // ── Relationship keywords ──
+    SysMLv2Lexer.REDEFINES, SysMLv2Lexer.SUBSETS,
+    SysMLv2Lexer.SPECIALIZES, SysMLv2Lexer.REFERENCES,
+    SysMLv2Lexer.CONJUGATES, SysMLv2Lexer.CHAINS, SysMLv2Lexer.CROSSES,
+    SysMLv2Lexer.UNIONS, SysMLv2Lexer.INTERSECTS, SysMLv2Lexer.DIFFERENCES,
+
+    // ── KerML relationship element keywords ──
+    SysMLv2Lexer.SPECIALIZATION, SysMLv2Lexer.CONJUGATION,
+    SysMLv2Lexer.DISJOINING, SysMLv2Lexer.INVERTING,
+    SysMLv2Lexer.FEATURING, SysMLv2Lexer.TYPING, SysMLv2Lexer.REDEFINITION,
+    SysMLv2Lexer.SUBTYPE, SysMLv2Lexer.SUBCLASSIFIER,
+    SysMLv2Lexer.SUBSET, SysMLv2Lexer.CONJUGATE,
+    SysMLv2Lexer.DISJOINT, SysMLv2Lexer.INVERSE,
+
+    // ── Requirement / state body keywords ──
+    SysMLv2Lexer.ASSUME, SysMLv2Lexer.REQUIRE, SysMLv2Lexer.FRAME,
+    SysMLv2Lexer.OBJECTIVE, SysMLv2Lexer.ENTRY, SysMLv2Lexer.DO,
+    SysMLv2Lexer.EXIT,
+
+    // ── Misc keywords preceding a name or qualified name ──
+    SysMLv2Lexer.ACCEPT, SysMLv2Lexer.SEND, SysMLv2Lexer.ASSIGN,
+    SysMLv2Lexer.TERMINATE, SysMLv2Lexer.FOR, SysMLv2Lexer.ABOUT,
+    SysMLv2Lexer.BY, SysMLv2Lexer.FILTER, SysMLv2Lexer.NEW,
+    SysMLv2Lexer.META, SysMLv2Lexer.OF,
+
+    // ── Punctuation that precedes names ──
+    SysMLv2Lexer.COLON, SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT,
+    SysMLv2Lexer.COLON_COLON, SysMLv2Lexer.COLON_COLON_GT,
+    SysMLv2Lexer.GT,           // closing angle bracket: <'shortName'> name
+    SysMLv2Lexer.FAT_ARROW,    // => target (crosses)
+    SysMLv2Lexer.TILDE,        // ~ conjugatedType
+    SysMLv2Lexer.COMMA,        // list separator in specializations
+    SysMLv2Lexer.HASH,         // # prefixMetadataFeature
 ]);
 
 /**
@@ -134,13 +213,11 @@ function looksLikeKeywordPosition(visibleTokens: Token[], index: number): boolea
         if (NAME_PRECEDING_KEYWORDS.has(prev.type)) {
             return false; // This identifier is a name after a keyword
         }
-        // If preceded by dot, '=', ':', '::', ':>', ':>>' this is a value/type/path, not a keyword
+        // If preceded by dot, '=', ':=', or path/type punctuation — this is
+        // a value, type reference, or path segment, not a keyword position.
         if (prev.type === SysMLv2Lexer.DOT ||
             prev.type === SysMLv2Lexer.EQ ||
-            prev.type === SysMLv2Lexer.COLON ||
-            prev.type === SysMLv2Lexer.COLON_COLON ||
-            prev.type === SysMLv2Lexer.COLON_GT ||
-            prev.type === SysMLv2Lexer.COLON_GT_GT) {
+            prev.type === SysMLv2Lexer.COLON_EQ) {
             return false;
         }
     }

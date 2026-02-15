@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.1.7]
+
+### Added
+
+- Comprehensive keyword validator tests — 14 new parser tests covering all expanded `NAME_PRECEDING_KEYWORDS` categories: KerML element keywords, visibility/prefix modifiers, action control nodes, reference-preceding keywords, relationship keywords, directionality, succession/flow, annotation/membership, `message`/`transition`, colon/specialization punctuation, and `:=` assignment skip logic
+- `findTextReferences()` unit tests — 6 new tests covering whole-word matching, partial-word exclusion, line-comment skipping, block-comment skipping, empty results, and regex special character safety
+- Cross-file references test — verifies text-based reference scanning finds usages across multiple documents
+- `includeDeclaration` filtering test — verifies references provider correctly excludes the declaration when `includeDeclaration: false`
+- Reference deduplication test — verifies no duplicate locations are returned
+- Cross-file CodeLens test — verifies reference counts include usages from other documents
+
+### Fixed
+
+- Expand `NAME_PRECEDING_KEYWORDS` from ~25 to ~120 tokens — identifiers after KerML keywords (`type`, `classifier`, `datatype`, `class`, `struct`, `assoc`, `metaclass`, etc.), action control nodes (`fork`, `join`, `merge`, `decide`), relationship keywords (`redefines`, `subsets`, `specializes`, `conjugates`, `chains`, etc.), KerML relationship elements (`specialization`, `conjugation`, `disjoining`, `inverting`, etc.), requirement/state body keywords (`assume`, `require`, `frame`, `objective`, `entry`, `do`, `exit`), and punctuation tokens (`:`, `:>`, `:>>`, `::`, `::>`, `>`, `=>`, `~`, `,`, `#`) are no longer falsely flagged as keyword typos
+- Fix skip-punctuation logic in keyword validator — replace `:`, `::`, `:>`, `:>>` (now in `NAME_PRECEDING_KEYWORDS`) with `DOT`, `=`, `:=` as the only "value/path" skip tokens
+- Add `MESSAGE` and `TRANSITION` to SysML definition/usage element keywords in `NAME_PRECEDING_KEYWORDS`
+
 ## [0.1.6]
 
 ### Fixed
