@@ -48,7 +48,7 @@ jobs:
 
       - name: Publish to npm
         run: |
-          npm config delete //registry.npmjs.org/:_authToken || true
+          sed -i '/_authToken/d' "$HOME/.npmrc" 2>/dev/null || true
           npm publish --provenance --access public
 
       - name: Package VSIX
