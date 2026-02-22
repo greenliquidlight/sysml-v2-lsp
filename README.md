@@ -53,16 +53,16 @@ Use the **"Client + Server"** compound debug configuration to debug both sides s
 
 ```
 ┌──────────────────────┐     IPC     ┌──────────────────────────┐
-│   VS Code Extension  │ ◄─────────► │    Language Server        │
-│   (Language Client)   │             │    (Separate Process)     │
+│   VS Code Extension  │ ◄─────────► │    Language Server       │
+│   (Language Client)  │             │    (Separate Process)    │
 ├──────────────────────┤             ├──────────────────────────┤
-│ • Starts server       │             │ • ANTLR4 parser           │
-│ • Registers language  │             │ • Diagnostics             │
-│                       │             │ • Completion (keywords)   │
-│                       │             │ • Symbols / hover         │
-│                       │             │ • Go-to-def / references  │
-│                       │             │ • Semantic tokens         │
-│                       │             │ • Rename / folding        │
+│ • Starts server      │             │ • ANTLR4 parser          │
+│ • Registers language │             │ • Diagnostics            │
+│                      │             │ • Completion (keywords)  │
+│                      │             │ • Symbols / hover        │
+│                      │             │ • Go-to-def / references │
+│                      │             │ • Semantic tokens        │
+│                      │             │ • Rename / folding       │
 └──────────────────────┘             └──────────────────────────┘
 ```
 
