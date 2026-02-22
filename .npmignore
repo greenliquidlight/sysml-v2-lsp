@@ -7,6 +7,9 @@
 # Include the bundled server files
 !dist/server/**
 
+# Include the SysML v2 standard library
+!sysml.library/**
+
 # Exclude sourcemaps from dist
 dist/**/*.map
 

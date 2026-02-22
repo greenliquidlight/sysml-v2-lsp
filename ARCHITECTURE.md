@@ -2,7 +2,7 @@
 
 ## Overview
 
-A Language Server Protocol implementation for SysML v2, structured as a monorepo. The server runs in a separate Node.js process, communicating with editor clients via LSP (stdio or IPC). Client implementations live under `clients/` — currently VS Code and a Python demo.
+A Language Server Protocol implementation for SysML v2, structured as a client/server monorepo. The server runs in a separate Node.js process, communicating with the VS Code extension (client) via IPC.
 
 ## Data Flow
 
@@ -11,19 +11,19 @@ A Language Server Protocol implementation for SysML v2, structured as a monorepo
       │
       ▼
 ┌─────────────────┐    ┌──────────────────┐    ┌──────────────────┐
-│  TextDocument   │────│ ANTLR4 Lexer +   │────│  Parse Tree      │
-│  (LSP protocol) │    │ Parser (antlr4ng)│    │  (AST)           │
+│  TextDocument    │───▶│ ANTLR4 Lexer +   │───▶│  Parse Tree      │
+│  (LSP protocol)  │    │ Parser (antlr4ng) │    │  (AST)           │
 └─────────────────┘    └──────────────────┘    └────────┬─────────┘
-                                                        │
-                              ┌─────────────────────────┤
-                              ▼                         ▼
+                                                         │
+                              ┌───────────────────────────┤
+                              ▼                           ▼
                     ┌──────────────────┐       ┌──────────────────┐
                     │  Error Listener  │       │  Symbol Table    │
                     │  → Diagnostics   │       │  → Scope Tree    │
                     └──────────────────┘       └────────┬─────────┘
-                                                        │
-                    ┌────────────────────┬──────────────┼──────────────────┐
-                    ▼                    ▼              ▼                  ▼
+                                                         │
+                    ┌────────────────────┬────────────────┼────────────────┐
+                    ▼                    ▼                ▼                ▼
           ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  ┌──────────┐
           │  Completion    │  │   Hover        │  │  Definition  │  │ Symbols  │
           │  (keywords +   │  │   (type info)  │  │  (resolve)   │  │ (outline)│
@@ -70,35 +70,3 @@ Caches parse results by document URI and version number. Re-parses only when the
 The ANTLR4 grammar files (`grammar/SysMLv2Lexer.g4`, `grammar/SysMLv2Parser.g4`) are sourced from [daltskin/sysml-v2-grammar](https://github.com/daltskin/sysml-v2-grammar) and committed directly to this repo. The `npm run update-grammar` script pulls the latest versions.
 
 Generated TypeScript parser files (`server/src/generated/`) are produced by `antlr-ng` and committed to the repo for contributor convenience.
-
-## MCP Server (`server/src/mcpServer.ts`)
-
-A standalone [Model Context Protocol](https://modelcontextprotocol.io/) server that exposes SysML v2 parsing and analysis via stdio transport. This allows AI assistants (Claude, GitHub Copilot, etc.) to interact with SysML models programmatically.
-
-### Tools
-
-| Tool | Description |
-|------|-------------|
-| `parse` | Parse SysML source and build a symbol table |
-| `validate` | Validate SysML source and return syntax errors |
-| `getSymbols` | List symbols, optionally filtered by kind/URI |
-| `getDefinition` | Find a symbol by name or qualified name |
-| `getReferences` | Find all references to a symbol |
-| `getHierarchy` | Get parent–child containment structure |
-| `getModelSummary` | High-level summary of loaded model(s) |
-
-### Resources
-
-| Resource URI | Description |
-|-------------|-------------|
-| `sysml://element-kinds` | All recognised SysML v2 element kinds |
-| `sysml://keywords` | Complete SysML v2 keyword list |
-| `sysml://grammar-overview` | Language structure reference (Markdown) |
-
-### Prompts
-
-| Prompt | Description |
-|--------|-------------|
-| `review-sysml` | Analyse a SysML model for correctness and best practices |
-| `explain-element` | Explain a SysML v2 element kind in detail |
-| `generate-sysml` | Generate SysML from a natural language description |

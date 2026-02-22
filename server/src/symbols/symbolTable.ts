@@ -1,9 +1,9 @@
 import { ParserRuleContext, TerminalNode, Token } from 'antlr4ng';
 import { Range } from 'vscode-languageserver/node.js';
-import { SysMLSymbol, SysMLElementKind } from './sysmlElements.js';
-import { Scope } from './scope.js';
-import { contextToRange, tokenToRange } from '../parser/positionUtils.js';
 import { ParseResult } from '../parser/parseDocument.js';
+import { contextToRange, tokenToRange } from '../parser/positionUtils.js';
+import { Scope } from './scope.js';
+import { SysMLElementKind, SysMLSymbol } from './sysmlElements.js';
 
 /**
  * Builds a symbol table from a parsed SysML document.
@@ -248,6 +248,7 @@ export class SymbolTable {
         'PerformActionUsage',
         'SatisfyRequirementUsage',
         'AssertConstraintUsage',
+        'IncludeUseCaseUsage',
     ]);
 
     /**
@@ -390,9 +391,14 @@ export class SymbolTable {
         }
 
         // Extract the name from the context
-        const name = this.extractName(ctx);
+        let name = this.extractName(ctx);
         if (!name) {
-            return undefined;
+            // Objectives are often anonymous — use a placeholder name
+            if (kind === SysMLElementKind.ObjectiveUsage) {
+                name = '(anonymous objective)';
+            } else {
+                return undefined;
+            }
         }
 
         const qualifiedName = parentQualifiedName
@@ -471,10 +477,16 @@ export class SymbolTable {
         if (lower.includes('constraintusage')) return SysMLElementKind.ConstraintUsage;
         if (lower.includes('itemusage')) return SysMLElementKind.ItemUsage;
         if (lower.includes('allocationusage')) return SysMLElementKind.AllocationUsage;
+        if (lower.includes('includeusecaseusage')) return SysMLElementKind.IncludeUseCaseUsage;
         if (lower.includes('usecaseusage')) return SysMLElementKind.UseCaseUsage;
         if (lower.includes('viewusage')) return SysMLElementKind.ViewUsage;
         if (lower.includes('viewpointusage')) return SysMLElementKind.ViewpointUsage;
-        if (lower.includes('concernusage')) return SysMLElementKind.ConstraintUsage;
+        if (lower.includes('concernusage')) return SysMLElementKind.ConcernUsage;
+        if (lower.includes('concerndefinition')) return SysMLElementKind.ConcernDef;
+        if (lower.includes('subjectusage')) return SysMLElementKind.SubjectUsage;
+        if (lower.includes('actorusage')) return SysMLElementKind.ActorUsage;
+        if (lower.includes('stakeholderusage')) return SysMLElementKind.StakeholderUsage;
+        if (lower.includes('objectiverequirementusage')) return SysMLElementKind.ObjectiveUsage;
         if (lower.includes('portionusage')) return SysMLElementKind.PartUsage; // timeslice/snapshot
         if (lower.includes('satisfyrequirementusage')) return SysMLElementKind.RequirementUsage;
         if (lower.includes('assertconstraintusage')) return SysMLElementKind.ConstraintUsage;
@@ -484,9 +496,9 @@ export class SymbolTable {
 
     /** Exact rule name → kind map for fast lookup on common rules. */
     private static readonly RULE_KIND_MAP = new Map<string, SysMLElementKind>([
-        // Package
+        // Package (Package wraps PackageDeclaration + PackageBody — only
+        // top-level Package / LibraryPackage rules should create symbols)
         ['Package', SysMLElementKind.Package],
-        ['PackageDeclaration', SysMLElementKind.Package],
         ['LibraryPackage', SysMLElementKind.Package],
         // Definitions
         ['PartDefinition', SysMLElementKind.PartDef],
@@ -530,8 +542,15 @@ export class SymbolTable {
         ['PerformActionUsage', SysMLElementKind.ActionUsage],
         ['SatisfyRequirementUsage', SysMLElementKind.RequirementUsage],
         ['AssertConstraintUsage', SysMLElementKind.ConstraintUsage],
-        ['ConcernUsage', SysMLElementKind.ConstraintUsage],
+        ['ConcernDefinition', SysMLElementKind.ConcernDef],
+        ['ConcernUsage', SysMLElementKind.ConcernUsage],
         ['PortionUsage', SysMLElementKind.PartUsage], // timeslice/snapshot
+        // Use-case / requirement body member usages
+        ['SubjectUsage', SysMLElementKind.SubjectUsage],
+        ['ActorUsage', SysMLElementKind.ActorUsage],
+        ['StakeholderUsage', SysMLElementKind.StakeholderUsage],
+        ['ObjectiveRequirementUsage', SysMLElementKind.ObjectiveUsage],
+        ['IncludeUseCaseUsage', SysMLElementKind.IncludeUseCaseUsage],
     ]);
 
     /**
@@ -607,12 +626,75 @@ export class SymbolTable {
 
     /**
      * Extract a type name from specialization syntax (": TypeName" or ":> TypeName").
+     *
+     * Walks only the **direct** children of the declaration context,
+     * looking for typing / specialization sub-rules. This avoids the
+     * previous bug where `ctx.getText()` concatenated the entire element
+     * body, causing a child's type (e.g. `ISQ::MassValue`) to be
+     * incorrectly attributed to the parent element.
      */
     private extractTypeName(ctx: ParserRuleContext): string | undefined {
-        const text = ctx.getText();
-        // Look for type specialization patterns
-        const match = text.match(/[:>]+\s*([A-Za-z_][\w:]*)/);
-        return match?.[1];
+        return this.extractTypeNameRecursive(ctx);
+    }
+
+    /**
+     * Recursively search the parse tree for typing/specialization rules,
+     * stopping at body rules to avoid capturing children's types.
+     */
+    private extractTypeNameRecursive(ctx: ParserRuleContext): string | undefined {
+        for (let i = 0; i < ctx.getChildCount(); i++) {
+            const child = ctx.getChild(i);
+            if (!(child instanceof ParserRuleContext)) continue;
+
+            const childRule = this.getRuleName(child).toLowerCase();
+
+            // Stop at the body rule — anything inside belongs to children
+            if (childRule.endsWith('body')) break;
+
+            // Typing & specialization rules that carry the type name
+            if (
+                childRule.includes('featurespecialization') ||
+                childRule.includes('specializationpart') ||
+                childRule.includes('typing') ||
+                childRule.includes('typedby') ||
+                childRule.includes('ownedfeaturetyping') ||
+                childRule.includes('ownedspecialization') ||
+                childRule.includes('ownedsubclassification') ||
+                childRule.includes('subclassificationpart')
+            ) {
+                const name = this.extractQualifiedNameFromSubtree(child);
+                if (name) return name;
+            }
+
+            // Recurse into intermediate wrapper rules (e.g. usage,
+            // usageDeclaration) to find deeply nested typing info
+            const result = this.extractTypeNameRecursive(child);
+            if (result) return result;
+        }
+        return undefined;
+    }
+
+    /**
+     * Extract a qualified name (e.g. "ISQ::MassValue") from a subtree by
+     * collecting identifier tokens and joining with "::".  Skips keywords
+     * and punctuation so only the actual type name is returned.
+     */
+    private extractQualifiedNameFromSubtree(ctx: ParserRuleContext): string | undefined {
+        // If this rule *is* a qualified-name wrapper, grab its text directly
+        const ruleName = this.getRuleName(ctx).toLowerCase();
+        if (ruleName === 'qualifiedname' || ruleName === 'ownedfeaturetyping' || ruleName === 'ownedspecialization' || ruleName === 'ownedsubclassification') {
+            return this.extractNameFromSubtree(ctx);
+        }
+
+        // Otherwise recurse into children looking for the first qualifying rule
+        for (let i = 0; i < ctx.getChildCount(); i++) {
+            const child = ctx.getChild(i);
+            if (child instanceof ParserRuleContext) {
+                const name = this.extractQualifiedNameFromSubtree(child);
+                if (name) return name;
+            }
+        }
+        return undefined;
     }
 
     /**

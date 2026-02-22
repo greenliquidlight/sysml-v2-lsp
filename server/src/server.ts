@@ -1,85 +1,88 @@
 import {
+    CallHierarchyIncomingCall,
+    CallHierarchyIncomingCallsParams,
+    CallHierarchyItem,
+    CallHierarchyOutgoingCall,
+    CallHierarchyOutgoingCallsParams,
+    CallHierarchyPrepareParams,
+    CodeAction,
+    CodeActionParams,
+    CodeLens,
+    CodeLensParams,
+    CompletionItem,
     createConnection,
-    TextDocuments,
-    ProposedFeatures,
+    DefinitionParams,
+    Diagnostic,
+    DiagnosticSeverity,
+    DidChangeConfigurationNotification,
+    DocumentFormattingParams,
+    DocumentLink,
+    DocumentLinkParams,
+    DocumentRangeFormattingParams,
+    DocumentSymbol,
+    DocumentSymbolParams,
+    FoldingRange,
+    FoldingRangeParams,
+    Hover,
     InitializeParams,
     InitializeResult,
-    TextDocumentSyncKind,
-    DidChangeConfigurationNotification,
-    CompletionItem,
-    DiagnosticSeverity,
-    Diagnostic,
-    TextDocumentPositionParams,
-    Hover,
-    DefinitionParams,
-    Location,
-    ReferenceParams,
-    DocumentSymbolParams,
-    DocumentSymbol,
-    FoldingRangeParams,
-    FoldingRange,
-    RenameParams,
-    WorkspaceEdit,
-    SemanticTokensParams,
-    SemanticTokens,
-    SemanticTokensLegend,
-    CodeActionParams,
-    CodeAction,
-    DocumentFormattingParams,
-    DocumentRangeFormattingParams,
-    TextEdit,
-    SelectionRangeParams,
-    SelectionRange,
-    CodeLensParams,
-    CodeLens,
-    WorkspaceSymbolParams,
-    SymbolInformation,
+    InlayHint,
+    InlayHintParams,
     LinkedEditingRangeParams,
     LinkedEditingRanges,
-    InlayHintParams,
-    InlayHint,
-    DocumentLinkParams,
-    DocumentLink,
-    TypeHierarchyPrepareParams,
+    Location,
+    ProposedFeatures,
+    ReferenceParams,
+    RenameParams,
+    SelectionRange,
+    SelectionRangeParams,
+    SemanticTokens,
+    SemanticTokensLegend,
+    SemanticTokensParams,
+    SignatureHelp,
+    SignatureHelpParams,
+    SymbolInformation,
+    TextDocumentPositionParams,
+    TextDocuments,
+    TextDocumentSyncKind,
+    TextEdit,
     TypeHierarchyItem,
+    TypeHierarchyPrepareParams,
     TypeHierarchySubtypesParams,
     TypeHierarchySupertypesParams,
-    CallHierarchyPrepareParams,
-    CallHierarchyItem,
-    CallHierarchyIncomingCallsParams,
-    CallHierarchyIncomingCall,
-    CallHierarchyOutgoingCallsParams,
-    CallHierarchyOutgoingCall,
-    SignatureHelpParams,
-    SignatureHelp,
+    WorkspaceEdit,
+    WorkspaceSymbolParams,
 } from 'vscode-languageserver/node.js';
 
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { Worker } from 'node:worker_threads';
-import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { Worker } from 'node:worker_threads';
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import { DocumentManager } from './documentManager.js';
-import { CompletionProvider } from './providers/completionProvider.js';
-import { HoverProvider } from './providers/hoverProvider.js';
-import { DefinitionProvider } from './providers/definitionProvider.js';
-import { ReferencesProvider } from './providers/referencesProvider.js';
-import { DocumentSymbolProvider } from './providers/documentSymbolProvider.js';
-import { SemanticTokensProvider, tokenTypes, tokenModifiers } from './providers/semanticTokensProvider.js';
-import { FoldingRangeProvider } from './providers/foldingRangeProvider.js';
-import { RenameProvider } from './providers/renameProvider.js';
-import { CodeActionProvider } from './providers/codeActionProvider.js';
-import { FormattingProvider } from './providers/formattingProvider.js';
-import { SelectionRangeProvider } from './providers/selectionRangeProvider.js';
-import { CodeLensProvider } from './providers/codeLensProvider.js';
-import { WorkspaceSymbolProvider } from './providers/workspaceSymbolProvider.js';
-import { LinkedEditingRangeProvider } from './providers/linkedEditingRangeProvider.js';
-import { InlayHintProvider } from './providers/inlayHintProvider.js';
-import { DocumentLinkProvider } from './providers/documentLinkProvider.js';
-import { TypeHierarchyProvider } from './providers/typeHierarchyProvider.js';
+import { SysMLModelProvider } from './model/sysmlModelProvider.js';
+import type { SysMLModelParams } from './model/sysmlModelTypes.js';
 import { CallHierarchyProvider } from './providers/callHierarchyProvider.js';
+import { CodeActionProvider } from './providers/codeActionProvider.js';
+import { CodeLensProvider } from './providers/codeLensProvider.js';
+import { CompletionProvider } from './providers/completionProvider.js';
+import { DefinitionProvider } from './providers/definitionProvider.js';
+import { DocumentLinkProvider } from './providers/documentLinkProvider.js';
+import { DocumentSymbolProvider } from './providers/documentSymbolProvider.js';
+import { FoldingRangeProvider } from './providers/foldingRangeProvider.js';
+import { FormattingProvider } from './providers/formattingProvider.js';
+import { HoverProvider } from './providers/hoverProvider.js';
+import { InlayHintProvider } from './providers/inlayHintProvider.js';
+import { LinkedEditingRangeProvider } from './providers/linkedEditingRangeProvider.js';
+import { ReferencesProvider } from './providers/referencesProvider.js';
+import { RenameProvider } from './providers/renameProvider.js';
+import { SelectionRangeProvider } from './providers/selectionRangeProvider.js';
+import { SemanticTokensProvider, tokenModifiers, tokenTypes } from './providers/semanticTokensProvider.js';
 import { SignatureHelpProvider } from './providers/signatureHelpProvider.js';
+import { TypeHierarchyProvider } from './providers/typeHierarchyProvider.js';
+import { WorkspaceSymbolProvider } from './providers/workspaceSymbolProvider.js';
 
-import type { ParseRequest, CancelRequest, ParseResponse } from './parser/parseWorker.js';
+import { initLibraryIndex } from './library/libraryIndex.js';
+import type { CancelRequest, ParseRequest, ParseResponse } from './parser/parseWorker.js';
 
 // Create a connection using all proposed LSP features
 const connection = createConnection(ProposedFeatures.all);
@@ -110,6 +113,7 @@ const documentLinkProvider = new DocumentLinkProvider(documentManager, documents
 const typeHierarchyProvider = new TypeHierarchyProvider(documentManager);
 const callHierarchyProvider = new CallHierarchyProvider(documentManager);
 const signatureHelpProvider = new SignatureHelpProvider(documentManager, documents);
+const modelProvider = new SysMLModelProvider(documentManager);
 
 // ---------------------------------------------------------------------------
 // Parse worker — offloads ANTLR parsing to a background thread
@@ -218,15 +222,28 @@ let hasWorkspaceFolderCapability = false;
 // Cached settings
 interface SysMLSettings {
     inlayHintsEnabled: boolean;
+    libraryPath: string;
 }
-let settings: SysMLSettings = { inlayHintsEnabled: true };
+let settings: SysMLSettings = { inlayHintsEnabled: true, libraryPath: '' };
+let libraryIndexed = false;
 
 async function fetchSettings(): Promise<void> {
     if (!hasConfigurationCapability) return;
     const config = await connection.workspace.getConfiguration('sysml');
+    const newLibraryPath = config?.library?.path ?? '';
+    const libraryPathChanged = newLibraryPath !== settings.libraryPath;
+
     settings = {
         inlayHintsEnabled: config?.inlayHints?.enabled ?? true,
+        libraryPath: newLibraryPath,
     };
+
+    // Only (re-)index the library when the path changes or on first run
+    if (!libraryIndexed || libraryPathChanged) {
+        const count = initLibraryIndex(__ownDirname, settings.libraryPath);
+        connection.console.log(`[library] indexed ${count} packages`);
+        libraryIndexed = true;
+    }
 }
 
 // --------------------------------------------------------------------------
@@ -347,7 +364,16 @@ connection.onInitialized(() => {
         );
     }
     connection.console.log('SysML v2 Language Server initialized');
-    fetchSettings();
+
+    // Fetch settings (which will index the library on first call).
+    // If the client doesn't support configuration, index with defaults.
+    fetchSettings().then(() => {
+        if (!libraryIndexed) {
+            const count = initLibraryIndex(__ownDirname);
+            connection.console.log(`[library] indexed ${count} packages`);
+            libraryIndexed = true;
+        }
+    });
 
     // Start the worker immediately to begin DFA warm-up in the background.
     // By the time the user opens a large file, the DFA should be warm.
@@ -377,7 +403,7 @@ const workerSemanticTokens = new Map<string, number[]>();
 const DEBOUNCE_MS = 300; // ms to wait after last keystroke before parsing
 
 documents.onDidOpen((event) => {
-    connection.console.log(`[open] ${event.document.uri}`);
+    connection.console.log(`[open] ${decodeURIComponent(event.document.uri)}`);
     // onDidChangeContent fires immediately after, which triggers validation
 });
 
@@ -415,7 +441,7 @@ documents.onDidChangeContent((event) => {
 
 documents.onDidClose((event) => {
     const uri = event.document.uri;
-    connection.console.log(`[close] ${uri}`);
+    connection.console.log(`[close] ${decodeURIComponent(uri)}`);
     // Cancel pending debounce
     const timer = validationTimers.get(uri);
     if (timer) {
@@ -436,7 +462,7 @@ async function validateDocumentAsync(document: TextDocument): Promise<void> {
     const uri = document.uri;
     const version = document.version;
     const text = document.getText();
-    const fileName = uri.split('/').pop() ?? uri;
+    const fileName = decodeURIComponent(uri.split('/').pop() ?? uri);
 
     connection.console.log(`[validate] ${fileName} — ${text.length} chars, parsing...`);
 
@@ -498,6 +524,9 @@ async function validateDocumentAsync(document: TextDocument): Promise<void> {
         `total ${totalMs}ms, ` +
         `${diagnostics.length} diagnostic(s)`
     );
+
+    // Store the real ANTLR parse time so `sysml/model` stats report it.
+    documentManager.setParseTimeMs(uri, response.timing.lexMs + response.timing.parseMs);
 
     // Cache worker-computed semantic tokens and tell VS Code to refresh.
     // This avoids a second cold main-thread parse (~22s) just for colorization.
@@ -681,6 +710,18 @@ connection.onSignatureHelp(
         return signatureHelpProvider.provideSignatureHelp(params);
     }
 );
+
+// --------------------------------------------------------------------------
+// Custom LSP request: sysml/model
+// --------------------------------------------------------------------------
+
+connection.onRequest('sysml/model', (params: SysMLModelParams) => {
+    return modelProvider.getModel(
+        params.textDocument.uri,
+        1,
+        params.scope,
+    );
+});
 
 // --------------------------------------------------------------------------
 // Start

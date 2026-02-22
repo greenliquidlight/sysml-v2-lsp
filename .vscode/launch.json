@@ -12,9 +12,9 @@
         "${workspaceFolder}/examples"
       ],
       "outFiles": [
-        "${workspaceFolder}/clients/vscode/out/**/*.js"
+        "${workspaceFolder}/client/out/**/*.js"
       ],
-      "preLaunchTask": "compile + bundle"
+      "preLaunchTask": "npm: compile"
     },
     {
       "name": "Attach to Server",
@@ -25,26 +25,12 @@
       "outFiles": [
         "${workspaceFolder}/server/out/**/*.js"
       ]
-    },
-    {
-      "name": "Debug MCP Server",
-      "type": "node",
-      "request": "launch",
-      "program": "${workspaceFolder}/dist/server/mcpServer.mjs",
-      "preLaunchTask": "compile + bundle",
-      "console": "integratedTerminal",
-      "outFiles": [
-        "${workspaceFolder}/dist/server/mcpServer.mjs.map"
-      ]
     }
   ],
   "compounds": [
     {
       "name": "Client + Server",
-      "configurations": [
-        "Launch Client",
-        "Attach to Server"
-      ]
+      "configurations": ["Launch Client", "Attach to Server"]
     }
   ]
 }

@@ -1,4 +1,4 @@
-.PHONY: help install generate build watch test test-e2e lint package package-server test-package clean update-grammar ci
+.PHONY: help install generate build watch test test-e2e lint package package-server test-package clean update-grammar update-library ci
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | \
@@ -81,5 +81,25 @@ update-grammar: ## Pull latest grammar from daltskin/grammars-v4
 	curl -fsSL $(GRAMMAR_BASE_URL)/SysMLv2Lexer.g4 -o grammar/SysMLv2Lexer.g4
 	curl -fsSL $(GRAMMAR_BASE_URL)/SysMLv2Parser.g4 -o grammar/SysMLv2Parser.g4
 	@echo "✅ Grammar files updated from $(GRAMMAR_REPO)"
+
+LIBRARY_REPO := Systems-Modeling/SysML-v2-Release
+LIBRARY_BRANCH := master
+LIBRARY_ARCHIVE_URL := https://github.com/$(LIBRARY_REPO)/archive/refs/heads/$(LIBRARY_BRANCH).tar.gz
+LIBRARY_DIR := sysml.library
+
+update-library: ## Pull latest SysML v2 standard library from OMG release repo
+	@echo "📥 Fetching SysML v2 standard library from $(LIBRARY_REPO)..."
+	@rm -rf /tmp/sysml-v2-library-update
+	@mkdir -p /tmp/sysml-v2-library-update
+	curl -fsSL $(LIBRARY_ARCHIVE_URL) | tar xz -C /tmp/sysml-v2-library-update --strip-components=1 --wildcards '*/$(LIBRARY_DIR)/*'
+	@rm -rf $(LIBRARY_DIR)/Domain\ Libraries $(LIBRARY_DIR)/Kernel\ Libraries $(LIBRARY_DIR)/Systems\ Library
+	@cp -R /tmp/sysml-v2-library-update/$(LIBRARY_DIR)/* $(LIBRARY_DIR)/
+	@rm -rf /tmp/sysml-v2-library-update
+	@echo ""
+	@echo "📊 Library stats:"
+	@echo "  $$(find $(LIBRARY_DIR) -name '*.sysml' | wc -l) .sysml files"
+	@echo "  $$(find $(LIBRARY_DIR) -name '*.kerml' | wc -l) .kerml files"
+	@echo ""
+	@echo "✅ SysML v2 standard library updated from $(LIBRARY_REPO)"
 
 ci: lint build test ## Full CI pipeline
