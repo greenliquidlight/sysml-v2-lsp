@@ -20,7 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: 'https://registry.npmjs.org'
           cache: npm
 
       - name: Install dependencies
@@ -47,9 +46,7 @@ jobs:
           fi
 
       - name: Publish to npm
-        run: |
-          sed -i '/_authToken/d' "$HOME/.npmrc" 2>/dev/null || true
-          npm publish --provenance --access public
+        run: npm publish --provenance --access public
 
       - name: Package VSIX
         run: npx @vscode/vsce package --no-dependencies
