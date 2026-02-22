@@ -2,12 +2,10 @@ node_modules/
 client/out/
 server/out/
 *.vsix
-*.tgz
 .vscode-test/
 *.tsbuildinfo
 .DS_Store
 *.log
 .sysml-cache/
-examples/temp/
-*:Zone.Identifier
-dist/
+docs/
+*.tgz

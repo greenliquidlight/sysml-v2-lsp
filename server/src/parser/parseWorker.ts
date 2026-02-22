@@ -210,7 +210,7 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.COLON, SysMLv2Lexer.COLON_GT, SysMLv2Lexer.COLON_GT_GT,
     SysMLv2Lexer.COLON_COLON, SysMLv2Lexer.COLON_COLON_GT,
     SysMLv2Lexer.GT, SysMLv2Lexer.FAT_ARROW, SysMLv2Lexer.TILDE,
-    SysMLv2Lexer.COMMA, SysMLv2Lexer.HASH,
+    SysMLv2Lexer.COMMA, SysMLv2Lexer.HASH, SysMLv2Lexer.AT,
 ]);
 
 interface SerializedDiagnostic {
@@ -256,12 +256,11 @@ export function validateKeywordsFromTokens(tokenStream: CommonTokenStream): Seri
         if (!positionOk) continue;
 
         const suggestion = findClosestKeyword(tok.text);
+        if (!suggestion) continue; // No close keyword match → likely a valid shorthand usage name
 
         const line = (tok.line ?? 1) - 1;
         const char = tok.column ?? 0;
-        const message = suggestion
-            ? `Unknown keyword '${tok.text}'. Did you mean '${suggestion}'?`
-            : `Unexpected identifier '${tok.text}' where a SysML keyword was expected.`;
+        const message = `Unknown keyword '${tok.text}'. Did you mean '${suggestion}'?`;
         diagnostics.push({
             severity: 1, // DiagnosticSeverity.Error
             range: {

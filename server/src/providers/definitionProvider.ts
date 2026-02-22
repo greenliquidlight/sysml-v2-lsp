@@ -3,11 +3,13 @@ import {
     Location,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
+import { resolveLibraryPackage } from '../library/libraryIndex.js';
 import { SymbolTable } from '../symbols/symbolTable.js';
 
 /**
  * Provides go-to-definition for SysML elements.
  * Resolves symbol at cursor → jumps to its declaration.
+ * Falls back to the standard library index for unresolved symbols.
  */
 export class DefinitionProvider {
     private symbolTable = new SymbolTable();
@@ -43,6 +45,15 @@ export class DefinitionProvider {
                         range: typeMatches[0].selectionRange,
                     };
                 }
+
+                // Type not found in open documents — try the standard library
+                const libUri = resolveLibraryPackage(directSymbol.typeName);
+                if (libUri) {
+                    return {
+                        uri: libUri,
+                        range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                    };
+                }
             }
             // Otherwise navigate to itself (already at definition)
             return {
@@ -64,6 +75,22 @@ export class DefinitionProvider {
                 uri: symbol.uri,
                 range: symbol.selectionRange,
             };
+        }
+
+        // Last resort: check the standard library index
+        const word = SymbolTable.getWordAtPosition(
+            text,
+            params.position.line,
+            params.position.character,
+        );
+        if (word) {
+            const libUri = resolveLibraryPackage(word);
+            if (libUri) {
+                return {
+                    uri: libUri,
+                    range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+                };
+            }
         }
 
         return null;

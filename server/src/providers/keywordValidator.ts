@@ -198,6 +198,7 @@ const NAME_PRECEDING_KEYWORDS: ReadonlySet<number> = new Set([
     SysMLv2Lexer.TILDE,        // ~ conjugatedType
     SysMLv2Lexer.COMMA,        // list separator in specializations
     SysMLv2Lexer.HASH,         // # prefixMetadataFeature
+    SysMLv2Lexer.AT,           // @ metadata annotation
 ]);
 
 /**
@@ -269,13 +270,12 @@ export function validateKeywords(result: ParseResult): Diagnostic[] {
         if (!looksLikeKeywordPosition(visibleTokens, i)) continue;
 
         const suggestion = findClosestKeyword(text);
+        if (!suggestion) continue; // No close keyword match → likely a valid shorthand usage name
 
         const line = (token.line ?? 1) - 1; // 0-based
         const char = token.column ?? 0;
 
-        const message = suggestion
-            ? `Unknown keyword '${text}'. Did you mean '${suggestion}'?`
-            : `Unexpected identifier '${text}' where a SysML keyword was expected.`;
+        const message = `Unknown keyword '${text}'. Did you mean '${suggestion}'?`;
 
         diagnostics.push({
             severity: DiagnosticSeverity.Error,

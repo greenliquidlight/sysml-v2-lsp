@@ -1,11 +1,12 @@
+import { TextDocument } from 'vscode-languageserver-textdocument';
 import {
     DocumentLink,
     DocumentLinkParams,
     Range,
+    TextDocuments,
 } from 'vscode-languageserver/node.js';
-import { TextDocument } from 'vscode-languageserver-textdocument';
-import { TextDocuments } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
+import { resolveLibraryPackage } from '../library/libraryIndex.js';
 import { SymbolTable } from '../symbols/symbolTable.js';
 
 /**
@@ -99,6 +100,10 @@ export class DocumentLinkProvider {
         const firstSegment = qualifiedName.split('::')[0];
         const matches = this.symbolTable.findByName(firstSegment);
         if (matches.length > 0) return { uri: matches[0].uri };
+
+        // Fall back to the standard library index
+        const libUri = resolveLibraryPackage(qualifiedName);
+        if (libUri) return { uri: libUri };
 
         return undefined;
     }
