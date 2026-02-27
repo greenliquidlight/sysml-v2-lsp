@@ -18,6 +18,11 @@
 - Documentation extraction from doc/comment nodes on symbols
 - Symbol table caching per URI keyed by document version
 - Multi-specialization support: comma-separated specialization targets with `:>` and `specializes`
+- LSP `sysml/serverStats` request: uptime, memory, and cache statistics
+- LSP `sysml/clearCache` request: flush all in-memory caches
+- LSP `sysml/status` notifications: begin/end parse progress events
+- Language configuration: folding markers (`#region`/`#endregion`), indentation rules, `wordPattern`
+- Model stats: lex/parse timing breakdown and complexity report in `sysml/model` response
 - New tests: codeActions, complexity, libraryIndex, semantic validation, MCP preview/diagnostics
 
 ### Changed
@@ -28,8 +33,11 @@
 - References provider: uses symbol-table–based `findReferences()` instead of cross-file text scanning
 - Diagnostics computed synchronously on document change (removed background parse worker thread)
 - Symbol table kind inference: direct string comparison replaces regex-based rule matching for minification safety
-- Document manager simplified: removed `TextDocuments` integration and parse timing tracking
-- esbuild: simplified to single server bundle (removed worker and separate MCP server entries)
+- Document manager simplified: removed `TextDocuments` integration; parse timing now derived from `ParseResult.timing`
+- esbuild: output format changed from ESM (`.mjs`) to CJS (`.js`); simplified to server + MCP + client bundles
+- Parser simplified: removed SLL/LL two-stage fallback with `BailErrorStrategy`; single-pass parse
+- MCP server: added `instructions` field for tool-call guidance
+- Library index: `resolveLibraryPackage()` replaced by `resolveLibraryType()` for type-level lookups
 
 ### Removed
 
@@ -37,6 +45,7 @@
 - `resolveAt()` and `getWordAtPosition()` from symbol table (moved to providers)
 - `findTextReferences()` text-scanning reference finder
 - Keyword typo validation from diagnostics provider (replaced by semantic validator)
+- Several parser and symbol table tests (connection-end parsing, keyword typo, `findTextReferences`)
 
 ## [0.2.0]
 
