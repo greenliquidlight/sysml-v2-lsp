@@ -1,5 +1,6 @@
 # Source files (bundled by esbuild into dist/)
 server/**
+client
 client/**
 clients/**
 grammar/**
@@ -15,6 +16,9 @@ index.cjs
 
 # Dependencies (bundled by esbuild)
 node_modules/**
+
+# Python virtual environment
+.venv/**
 
 # Dev containers
 .devcontainer/**
@@ -35,6 +39,11 @@ ARCHITECTURE.md
 .github/**
 .vscode/**
 .gitignore
+
+# Eclipse metadata from sysml.library (upstream artifacts)
+sysml.library/.project
+sysml.library/.settings/**
+sysml.library/.gitignore
 
 # MCP server not needed in VSIX (install via npm for MCP)
 dist/server/mcpServer.js

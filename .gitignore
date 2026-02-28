@@ -10,3 +10,4 @@ server/out/
 examples/temp/
 /docs/
 *.tgz
+.venv/
