@@ -1,6 +1,6 @@
 import { ParserRuleContext, TerminalNode, Token } from 'antlr4ng';
 import { Range } from 'vscode-languageserver/node.js';
-import { MultiplicityBoundsContext } from '../generated/SysMLv2Parser.js';
+import { MultiplicityBoundsContext, SysMLv2Parser } from '../generated/SysMLv2Parser.js';
 import { ParseResult } from '../parser/parseDocument.js';
 import { contextToRange, tokenToRange } from '../parser/positionUtils.js';
 import { Scope } from './scope.js';
@@ -189,9 +189,12 @@ export class SymbolTable {
      * Get the parser rule name from a context (e.g., "packageDeclaration").
      */
     private getRuleName(ctx: ParserRuleContext): string {
+        const idx = ctx.ruleIndex;
+        if (idx >= 0 && idx < SysMLv2Parser.ruleNames.length) {
+            return SysMLv2Parser.ruleNames[idx];
+        }
+        // Fallback (should never happen)
         const ctorName = ctx.constructor.name;
-        // ANTLR generates contexts like "PackageDeclarationContext"
-        // Strip "Context" suffix to get the rule name
         if (ctorName.endsWith('Context')) {
             return ctorName.slice(0, -'Context'.length);
         }
@@ -609,9 +612,8 @@ export class SymbolTable {
      * Recursively search for a MultiplicityBoundsContext in the subtree.
      */
     private findMultiplicityBounds(ctx: ParserRuleContext): MultiplicityBoundsContext | undefined {
-        const ctxName = ctx.constructor.name;
-        // Check using constructor name to avoid instanceof issues with module loading
-        if (ctxName === 'MultiplicityBoundsContext') {
+        // Use ruleIndex instead of constructor.name to survive esbuild minification
+        if (ctx.ruleIndex === SysMLv2Parser.RULE_multiplicityBounds) {
             return ctx as MultiplicityBoundsContext;
         }
         for (let i = 0; i < ctx.getChildCount(); i++) {
