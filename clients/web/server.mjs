@@ -125,8 +125,12 @@ class LspClient {
     }
 
     async shutdown() {
-        await this._request("shutdown");
-        this._notify("exit");
+        const timeout = (ms) => new Promise((_, reject) =>
+            setTimeout(() => reject(new Error("shutdown timed out")), ms));
+        try {
+            await Promise.race([this._request("shutdown"), timeout(2000)]);
+            this._notify("exit");
+        } catch { /* timed out or LSP already gone */ }
         this._proc?.kill();
     }
 
@@ -330,6 +334,9 @@ async function main() {
 
     process.on("SIGINT", async () => {
         console.log("\nShutting down...");
+        // Force-exit after 3s in case graceful shutdown hangs
+        const forceTimer = setTimeout(() => process.exit(1), 3000);
+        forceTimer.unref();
         await lsp.shutdown();
         process.exit(0);
     });
