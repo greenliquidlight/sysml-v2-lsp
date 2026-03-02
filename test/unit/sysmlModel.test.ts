@@ -23,7 +23,7 @@ describe('SysML Model Provider', () => {
         const docManager = new DocumentManager();
 
         // Simulate document open by parsing and injecting into the cache
-        const parseResult = parseDocument(text);
+        parseDocument(text);
         // Use the internal parse method by creating a mock TextDocument
         const { TextDocument } = await import('vscode-languageserver-textdocument');
         const doc = TextDocument.create(uri, 'sysml', 1, text);
@@ -31,6 +31,7 @@ describe('SysML Model Provider', () => {
         docManager.parse(doc);
 
         const provider = new SysMLModelProvider(docManager);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         return provider.getModel(uri, 1, scopes as any);
     }
 
@@ -803,6 +804,7 @@ package Test {
 /**
  * Recursively validate that an element tree has the correct shape.
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function validateElementTree(elements: any[]): void {
     for (const element of elements) {
         expect(typeof element.type).toBe('string');

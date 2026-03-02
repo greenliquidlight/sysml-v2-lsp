@@ -41,18 +41,15 @@ export class DefinitionProvider {
             const word = this.getWordAtPosition(text, params.position.line, params.position.character);
             if (!word) return null;
 
-            // Search for a matching symbol by name in the document
-            const matches = this.symbolTable.findByName(word);
-            if (matches.length > 0) {
-                return {
-                    uri: matches[0].uri,
-                    range: matches[0].selectionRange,
-                };
-            }
-
-            // For qualified names (e.g. ISQ::mass), also try the
-            // member part against the local symbol table
+            // For qualified names (e.g. ISQ::mass), prefer the
+            // standard library — the qualifier is a strong signal
+            // that the user means a library package, not a local symbol.
             if (word.includes('::')) {
+                const libLoc = this.resolveFromLibrary(word);
+                if (libLoc) return libLoc;
+
+                // Fall back to local member lookup only if library
+                // resolution fails
                 const member = word.split('::').pop()!;
                 const memberMatches = this.symbolTable.findByName(member);
                 if (memberMatches.length > 0) {
@@ -61,10 +58,19 @@ export class DefinitionProvider {
                         range: memberMatches[0].selectionRange,
                     };
                 }
+                return null;
             }
 
-            // Fall back to the standard library (tries both qualified
-            // and unqualified forms)
+            // Unqualified name — search local symbols first
+            const matches = this.symbolTable.findByName(word);
+            if (matches.length > 0) {
+                return {
+                    uri: matches[0].uri,
+                    range: matches[0].selectionRange,
+                };
+            }
+
+            // Fall back to the standard library
             return this.resolveFromLibrary(word);
         }
 

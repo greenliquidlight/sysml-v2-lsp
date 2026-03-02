@@ -1,4 +1,6 @@
 import {
+    CodeActionKind,
+    CodeActionParams,
     CompletionItem,
     createConnection,
     DefinitionParams,
@@ -39,6 +41,7 @@ import { RenameProvider } from './providers/renameProvider.js';
 import { SemanticTokensProvider, tokenModifiers, tokenTypes } from './providers/semanticTokensProvider.js';
 import { SemanticValidator } from './providers/semanticValidator.js';
 import { validateKeywords } from './providers/keywordValidator.js';
+import { CodeActionProvider } from './providers/codeActionProvider.js';
 
 // Create a connection using all proposed LSP features
 const connection = createConnection(ProposedFeatures.all);
@@ -61,6 +64,7 @@ const documentSymbolProvider = new DocumentSymbolProvider(documentManager);
 const semanticTokensProvider = new SemanticTokensProvider(documentManager);
 const foldingRangeProvider = new FoldingRangeProvider(documentManager);
 const renameProvider = new RenameProvider(documentManager);
+const codeActionProvider = new CodeActionProvider(documentManager);
 
 let hasConfigurationCapability = false;
 let hasWorkspaceFolderCapability = false;
@@ -118,6 +122,13 @@ connection.onInitialize((params: InitializeParams): InitializeResult => {
             // Rename
             renameProvider: {
                 prepareProvider: true,
+            },
+
+            // Code actions (quick fixes)
+            codeActionProvider: {
+                codeActionKinds: [
+                    CodeActionKind.QuickFix,
+                ],
             },
         },
     };
@@ -265,6 +276,12 @@ connection.onPrepareRename(
 connection.onRenameRequest(
     (params: RenameParams): WorkspaceEdit | null => {
         return renameProvider.provideRename(params);
+    }
+);
+
+connection.onCodeAction(
+    (params: CodeActionParams) => {
+        return codeActionProvider.provideCodeActions(params);
     }
 );
 

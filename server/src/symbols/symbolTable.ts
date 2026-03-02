@@ -282,6 +282,8 @@ export class SymbolTable {
         if (lower === 'allocationdefinition') return SysMLElementKind.AllocationDef;
         if (lower === 'usecasedefinition') return SysMLElementKind.UseCaseDef;
         if (lower === 'enumerationdefinition') return SysMLElementKind.EnumDef;
+        if (lower === 'enumeratedvalue') return SysMLElementKind.EnumUsage;
+        if (lower === 'enumerationusage') return SysMLElementKind.EnumUsage;
         if (lower === 'calculationdefinition' || lower === 'calcdefinition') return SysMLElementKind.CalcDef;
         if (lower === 'viewdefinition') return SysMLElementKind.ViewDef;
         if (lower === 'viewpointdefinition') return SysMLElementKind.ViewpointDef;
@@ -352,10 +354,15 @@ export class SymbolTable {
             }
         }
 
-        // Fallback: look deeper for any identifier in the first few children
+        // Fallback: look deeper for any identifier in the first few children.
+        // Skip prefix metadata subtrees — they contain metadata annotation
+        // identifiers (e.g. #logical) that are NOT the declared name.
         for (let i = 0; i < Math.min(ctx.getChildCount(), 5); i++) {
             const child = ctx.getChild(i);
             if (child instanceof ParserRuleContext) {
+                if (this.isPrefixMetadataRule(this.getRuleName(child))) {
+                    continue;
+                }
                 const name = this.extractName(child);
                 if (name) return name;
             }
@@ -366,6 +373,8 @@ export class SymbolTable {
 
     /**
      * Extract the range of just the name token.
+     * Skips prefix metadata subtrees so that metadata annotation
+     * identifiers (e.g. #logical) are not mistaken for the declared name.
      */
     private extractNameRange(ctx: ParserRuleContext): Range | undefined {
         for (let i = 0; i < ctx.getChildCount(); i++) {
@@ -374,6 +383,9 @@ export class SymbolTable {
                 return tokenToRange(child.symbol);
             }
             if (child instanceof ParserRuleContext) {
+                if (this.isPrefixMetadataRule(this.getRuleName(child))) {
+                    continue;
+                }
                 const result = this.extractNameRange(child);
                 if (result) return result;
             }
@@ -642,6 +654,27 @@ export class SymbolTable {
             }
         }
         return undefined;
+    }
+
+    /**
+     * Check if a rule name corresponds to a prefix metadata subtree
+     * that should be skipped during name extraction.
+     *
+     * These rules contain metadata annotation identifiers (e.g. the
+     * `logical` in `#logical`) that are NOT the element's declared
+     * name.
+     */
+    private isPrefixMetadataRule(ruleName: string): boolean {
+        const lower = ruleName.toLowerCase();
+        return (
+            lower.includes('prefixmetadata') ||
+            lower === 'usageextensionkeyword' ||
+            lower === 'definitionextensionkeyword' ||
+            lower === 'prefixmetadatamember' ||
+            lower === 'prefixmetadataannotation' ||
+            lower === 'prefixmetadatafeature' ||
+            lower === 'prefixmetadatausage'
+        );
     }
 
     /**

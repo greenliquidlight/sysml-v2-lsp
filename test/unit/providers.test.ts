@@ -39,7 +39,9 @@ async function setupMulti(entries: { text: string; uri: string }[]) {
 }
 
 /** Minimal mock for TextDocuments<TextDocument> */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function mockDocs(docs: { uri: string }[]): any {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const m = new Map<string, any>();
     for (const d of docs) m.set(d.uri, d);
     return { get: (uri: string) => m.get(uri) };
@@ -921,7 +923,7 @@ describe('Hover Provider', () => {
         });
 
         expect(hover).not.toBeNull();
-        expect((hover!.contents as any).value).toContain('Vehicle');
+        expect((hover!.contents as unknown as { value: string }).value).toContain('Vehicle');
     });
 
     it('should return null for empty position', async () => {
@@ -1012,7 +1014,7 @@ describe('References Provider', () => {
         const fileA = `package Lib { part def Sensor { attribute reading : Real; } }`;
         const fileB = `package App { import Lib::*; part mySensor : Sensor; }`;
 
-        const { dm, docs } = await setupMulti([
+        const { dm } = await setupMulti([
             { text: fileA, uri: 'test://lib.sysml' },
             { text: fileB, uri: 'test://app.sysml' },
         ]);
@@ -1220,6 +1222,7 @@ describe('Completion Provider', () => {
 
         const provider = new CompletionProvider(dm);
         const item = { label: 'part def', kind: 6, data: 'part def' };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const resolved = provider.resolveCompletion(item as any);
         expect(resolved.label).toBe('part def');
     });

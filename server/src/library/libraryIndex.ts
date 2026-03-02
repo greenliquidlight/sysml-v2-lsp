@@ -1,6 +1,6 @@
 import { closeSync, existsSync, openSync, readdirSync, readFileSync, readSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
  * Index of SysML v2 standard library packages and type declarations.
@@ -37,6 +37,14 @@ const PACKAGE_DECL_RE = /^(?:standard\s+)?(?:library\s+)?package\s+(?:<\w+>\s+)?
  *   alias Box for RectangularCuboid;
  */
 const TYPE_DECL_RE = /^\s*(?:abstract\s+)?(?:datatype|struct|metaclass|alias|(?:(?:part|attribute|port|action|state|item|connection|interface|requirement|constraint|allocation|usecase|use\s+case|enum|calc|view|viewpoint|metadata|analysis|case|concern|rendering|verification|flow|occurrence|ref)\s+def))\s+(?:all\s+)?'?(\w+)'?/;
+
+/**
+ * Regex to extract usage declarations from library files.
+ * Matches usage keywords (without `def`) to capture library
+ * attribute usages like `attribute mass: MassValue`,
+ * `attribute speed: SpeedValue`, etc.
+ */
+const USAGE_DECL_RE = /^\s{4}(?:abstract\s+)?(?:attribute|part|port|action|state|item|connection|interface|requirement|constraint|allocation|use\s+case|enum|calc|view|viewpoint|occurrence|ref|flow)\s+'?(\w+)'?\s*(?::|\[|:>|;|\{)/;
 
 /** Library type location: file URI and 0-based line number. */
 export interface LibraryTypeLocation {
@@ -87,6 +95,8 @@ function buildIndex(libRoot: string): { packages: Map<string, string>; types: Ma
                     // Full-file scan for type declarations with line numbers
                     const content = readFileSync(full, 'utf8');
                     const lines = content.split('\n');
+                    // Extract the package name for qualified indexing
+                    const pkgName = m ? m[1] : undefined;
                     for (let i = 0; i < lines.length; i++) {
                         const tm = TYPE_DECL_RE.exec(lines[i]);
                         if (tm) {
@@ -95,6 +105,21 @@ function buildIndex(libRoot: string): { packages: Map<string, string>; types: Ma
                             // shadowing by reflective re-declarations)
                             if (!types.has(typeName)) {
                                 types.set(typeName, { uri: fileUri, line: i });
+                            }
+                        }
+                        // Also index usage declarations (e.g. attribute mass)
+                        const um = USAGE_DECL_RE.exec(lines[i]);
+                        if (um) {
+                            const usageName = um[1];
+                            if (!types.has(usageName)) {
+                                types.set(usageName, { uri: fileUri, line: i });
+                            }
+                            // Also index qualified form: Pkg::name
+                            if (pkgName) {
+                                const qualName = `${pkgName}::${usageName}`;
+                                if (!types.has(qualName)) {
+                                    types.set(qualName, { uri: fileUri, line: i });
+                                }
                             }
                         }
                     }
@@ -167,11 +192,25 @@ export function resolveLibraryPackage(name: string): string | undefined {
  * Returns the file URI and 0-based line number so Go-to-Definition
  * can navigate directly to the declaration.
  *
+ * Handles qualified names like "ISQ::mass" — tries the full
+ * qualified name first, then falls back to the simple member name.
+ *
  * @returns `{ uri, line }` or `undefined` if not found.
  */
 export function resolveLibraryType(name: string): LibraryTypeLocation | undefined {
     if (!typeIndex) return undefined;
-    return typeIndex.get(name);
+
+    // Try the exact name first (handles both simple and qualified forms)
+    const exact = typeIndex.get(name);
+    if (exact) return exact;
+
+    // For qualified names, try just the member part
+    if (name.includes('::')) {
+        const member = name.split('::').pop()!;
+        return typeIndex.get(member);
+    }
+
+    return undefined;
 }
 
 /**
@@ -186,4 +225,98 @@ export function getLibraryPackageNames(): string[] {
  */
 export function getLibraryTypeNames(): string[] {
     return typeIndex ? Array.from(typeIndex.keys()) : [];
+}
+
+/**
+ * Library hover information extracted from a declaration and its
+ * surrounding doc-comment / context.
+ */
+export interface LibraryHoverInfo {
+    /** The declaration line (e.g. `attribute mass: MassValue[*] ...`) */
+    declaration: string;
+    /** The containing package name, if known */
+    packageName?: string;
+    /** ISO / doc comment extracted from `/* ... *\/` above the decl */
+    documentation?: string;
+}
+
+/**
+ * Extract hover information for a library element by reading the
+ * declaration line and any preceding doc-comment from disk.
+ *
+ * @param name  Simple or qualified name (e.g. "mass", "ISQ::mass")
+ * @returns Hover info or `undefined` if not in the library.
+ */
+export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined {
+    const loc = resolveLibraryType(name);
+    if (!loc) return undefined;
+
+    // Convert file URI back to a filesystem path.
+    // fileURLToPath properly decodes percent-encoded characters
+    // (e.g. %20 → space) that appear in paths like "Domain Libraries".
+    let filePath: string;
+    try {
+        filePath = fileURLToPath(loc.uri);
+    } catch {
+        return undefined;
+    }
+
+    let content: string;
+    try {
+        content = readFileSync(filePath, 'utf8');
+    } catch {
+        return undefined;
+    }
+
+    const lines = content.split('\n');
+    const declLine = (lines[loc.line] ?? '').trim();
+
+    // Try to find the containing package name from the index
+    let packageName: string | undefined;
+    if (index) {
+        for (const [pkg, uri] of index.entries()) {
+            if (uri === loc.uri) {
+                packageName = pkg;
+                break;
+            }
+        }
+    }
+
+    // Extract preceding doc-comment (/* ... */)
+    let documentation: string | undefined;
+    const commentLines: string[] = [];
+    for (let i = loc.line - 1; i >= 0 && i >= loc.line - 30; i--) {
+        const l = (lines[i] ?? '').trim();
+        if (l.endsWith('*/')) {
+            // Start collecting comment (backwards)
+            commentLines.unshift(l);
+            for (let j = i - 1; j >= 0 && j >= i - 50; j--) {
+                const cl = (lines[j] ?? '').trim();
+                commentLines.unshift(cl);
+                if (cl.startsWith('/*')) break;
+            }
+            break;
+        }
+        // Skip blank lines between comment and declaration
+        if (l === '') continue;
+        // Hit a non-blank, non-comment line — stop
+        break;
+    }
+
+    if (commentLines.length > 0) {
+        documentation = commentLines
+            .map(l => l
+                .replace(/^\/\*+\s*/, '')
+                .replace(/\s*\*+\/$/, '')
+                .replace(/^\*\s?/, '')
+                .trim())
+            .filter(l => l.length > 0)
+            .join('\n');
+    }
+
+    return {
+        declaration: declLine,
+        packageName,
+        documentation,
+    };
 }
