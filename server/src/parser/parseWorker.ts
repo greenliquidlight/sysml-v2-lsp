@@ -218,6 +218,7 @@ interface SerializedDiagnostic {
     range: { start: { line: number; character: number }; end: { line: number; character: number } };
     message: string;
     source: string;
+    data?: Record<string, unknown>;
 }
 
 export function validateKeywordsFromTokens(tokenStream: CommonTokenStream): SerializedDiagnostic[] {
@@ -269,6 +270,7 @@ export function validateKeywordsFromTokens(tokenStream: CommonTokenStream): Seri
             },
             message,
             source: 'sysml',
+            data: { typo: tok.text, suggestion },
         });
     }
     return diagnostics;
@@ -346,13 +348,36 @@ const ST_OPERATOR = 10;
 const _ST_ENUM = 11;
 const _ST_INTERFACE = 12;
 
-function classifyTokenType(text: string): number | undefined {
-    if (text.startsWith('/*') || text.startsWith('//')) return ST_COMMENT;
-    if (text.startsWith('"') || text.startsWith("'")) return ST_STRING;
-    if (/^\d/.test(text)) return ST_NUMBER;
-    if (/^[+\-*/<>=!&|^~%]+$/.test(text) || text === '::' || text === ':>' || text === ':>>') return ST_OPERATOR;
+/** Lexer token types that map to the "operator" semantic token. */
+const OPERATOR_TOKENS = new Set([
+    SysMLv2Lexer.BANG_EQ_EQ,    // !==
+    SysMLv2Lexer.STAR_STAR,     // **
+    SysMLv2Lexer.COLON_GT,      // :>
+    SysMLv2Lexer.COLON_GT_GT,   // :>>
+    SysMLv2Lexer.AMP,           // &
+    SysMLv2Lexer.COLON_COLON,   // ::
+    SysMLv2Lexer.STAR,          // *
+    SysMLv2Lexer.PIPE,          // |
+    SysMLv2Lexer.EQ_EQ,         // ==
+    SysMLv2Lexer.BANG_EQ,        // !=
+    SysMLv2Lexer.PLUS,          // +
+    SysMLv2Lexer.MINUS,         // -
+    SysMLv2Lexer.ARROW,         // ->
+    SysMLv2Lexer.SLASH,         // /
+    SysMLv2Lexer.LT,            // <
+    SysMLv2Lexer.EQ,            // =
+    SysMLv2Lexer.GT,            // >
+    SysMLv2Lexer.CARET,         // ^
+    SysMLv2Lexer.TILDE,         // ~
+]);
+
+function classifyTokenType(text: string, lexerType: number): number | undefined {
+    if (lexerType === SysMLv2Lexer.REGULAR_COMMENT || lexerType === SysMLv2Lexer.SINGLE_LINE_NOTE) return ST_COMMENT;
+    if (lexerType === SysMLv2Lexer.STRING || lexerType === SysMLv2Lexer.DOUBLE_STRING) return ST_STRING;
+    if (lexerType === SysMLv2Lexer.INTEGER || lexerType === SysMLv2Lexer.REAL) return ST_NUMBER;
+    if (OPERATOR_TOKENS.has(lexerType)) return ST_OPERATOR;
     if (SEMANTIC_KEYWORDS.has(text)) return ST_KEYWORD;
-    if (/^[a-zA-Z_]\w*$/.test(text)) return ST_VARIABLE;
+    if (lexerType === SysMLv2Lexer.IDENTIFIER) return ST_VARIABLE;
     return undefined;
 }
 
@@ -372,7 +397,7 @@ function buildSemanticTokenData(tokenStream: CommonTokenStream): number[] {
         const tok = allTokens[i];
         if (!tok.text || tok.channel !== 0) continue;
 
-        const tokenType = classifyTokenType(tok.text);
+        const tokenType = classifyTokenType(tok.text, tok.type);
         if (tokenType === undefined) continue;
 
         const line = (tok.line ?? 1) - 1; // 0-based

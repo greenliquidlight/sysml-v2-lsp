@@ -14,37 +14,240 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * user-specified custom path) for `.sysml` / `.kerml` files.
  */
 
+// ---- String scanning helpers ----
+
+function isWordChar(code: number): boolean {
+    return (code >= 65 && code <= 90)   // A-Z
+        || (code >= 97 && code <= 122)  // a-z
+        || (code >= 48 && code <= 57)   // 0-9
+        || code === 95;                 // _
+}
+
+function skipSpaces(line: string, pos: number): number {
+    while (pos < line.length && (line[pos] === ' ' || line[pos] === '\t')) pos++;
+    return pos;
+}
+
+/** Read a word (\w+) at pos after skipping spaces. Returns [word, endPos] or undefined. */
+function readWord(line: string, pos: number): [string, number] | undefined {
+    pos = skipSpaces(line, pos);
+    const start = pos;
+    while (pos < line.length && isWordChar(line.charCodeAt(pos))) pos++;
+    return pos > start ? [line.slice(start, pos), pos] : undefined;
+}
+
+/** Read a name that may be wrapped in single quotes ('Name'). */
+function readName(line: string, pos: number): [string, number] | undefined {
+    pos = skipSpaces(line, pos);
+    if (pos < line.length && line[pos] === "'") {
+        pos++;
+        const start = pos;
+        while (pos < line.length && isWordChar(line.charCodeAt(pos))) pos++;
+        const name = line.slice(start, pos);
+        if (pos < line.length && line[pos] === "'") pos++;
+        return name ? [name, pos] : undefined;
+    }
+    return readWord(line, pos);
+}
+
+/** Check if the word at pos matches the given keyword (followed by non-word char or end). */
+function matchWord(line: string, pos: number, keyword: string): boolean {
+    if (!line.startsWith(keyword, pos)) return false;
+    const after = pos + keyword.length;
+    return after >= line.length || !isWordChar(line.charCodeAt(after));
+}
+
+// ---- Declaration keyword sets ----
+
+/** Keywords that require a trailing `def` to form a type declaration. */
+const DEF_KEYWORDS = new Set([
+    'part', 'attribute', 'port', 'action', 'state', 'item', 'connection',
+    'interface', 'requirement', 'constraint', 'allocation', 'usecase',
+    'enum', 'calc', 'view', 'viewpoint', 'metadata', 'analysis', 'case',
+    'concern', 'rendering', 'verification', 'flow', 'occurrence', 'ref',
+]);
+
+/** Keywords that are standalone type declarations (no `def` suffix). */
+const STANDALONE_TYPE_KEYWORDS = new Set(['datatype', 'struct', 'metaclass', 'alias', 'classifier']);
+
+/** Keywords that introduce a usage (attribute/part/etc. without `def`). */
+const USAGE_KEYWORDS = new Set([
+    'attribute', 'part', 'port', 'action', 'state', 'item', 'connection',
+    'interface', 'requirement', 'constraint', 'allocation',
+    'enum', 'calc', 'view', 'viewpoint', 'occurrence', 'ref', 'flow',
+]);
+
+// ---- Declaration extraction functions ----
+
 /**
- * Regex to extract the package name from a library file's first
- * declaration line.  Handles:
+ * Extract the package name from a library file's header text.
+ * Handles:
  *   standard library package ISQ {
  *   standard library package <USCU> USCustomaryUnits {
  *   package Foo {
  */
-const PACKAGE_DECL_RE = /^(?:standard\s+)?(?:library\s+)?package\s+(?:<\w+>\s+)?(\w+)/m;
+function extractPackageNameFromHead(head: string): string | undefined {
+    const lines = head.split('\n');
+    for (const line of lines) {
+        let pos = skipSpaces(line, 0);
+
+        // Skip optional "standard"
+        if (matchWord(line, pos, 'standard')) {
+            pos = skipSpaces(line, pos + 8);
+        }
+
+        // Skip optional "library"
+        if (matchWord(line, pos, 'library')) {
+            pos = skipSpaces(line, pos + 7);
+        }
+
+        // Must have "package"
+        if (!matchWord(line, pos, 'package')) continue;
+        pos = skipSpaces(line, pos + 7);
+
+        // Skip optional <shortName>
+        if (pos < line.length && line[pos] === '<') {
+            const close = line.indexOf('>', pos);
+            if (close < 0) continue;
+            pos = skipSpaces(line, close + 1);
+        }
+
+        // Read the package name
+        const w = readWord(line, pos);
+        if (w) return w[0];
+    }
+    return undefined;
+}
 
 /**
- * Regex to extract individual type declarations from library files.
- * Matches declaration keywords followed by an optional `all` keyword
- * and the type name.  Handles patterns like:
+ * Extract a type declaration name from a single line.
+ * Matches patterns like:
  *   datatype Real specializes Complex;
- *   abstract datatype ScalarValue specializes DataValue;
- *   part def Vehicle { ... }
+ *   abstract part def Vehicle { ... }
  *   enum def Color { ... }
- *   struct all Body specializes Object { ... }
- *   metaclass Element { ... }
- *   metadata def ActionUsage { ... }
  *   alias Box for RectangularCuboid;
+ *   abstract classifier Anything { ... }
+ *   use case def MyCase { ... }
  */
-const TYPE_DECL_RE = /^\s*(?:abstract\s+)?(?:datatype|struct|metaclass|alias|(?:(?:part|attribute|port|action|state|item|connection|interface|requirement|constraint|allocation|usecase|use\s+case|enum|calc|view|viewpoint|metadata|analysis|case|concern|rendering|verification|flow|occurrence|ref)\s+def))\s+(?:all\s+)?'?(\w+)'?/;
+function extractTypeNameFromLine(line: string): string | undefined {
+    let w = readWord(line, 0);
+    if (!w) return undefined;
+    let [keyword, pos] = w;
+
+    // Skip optional "abstract"
+    if (keyword === 'abstract') {
+        w = readWord(line, pos);
+        if (!w) return undefined;
+        [keyword, pos] = w;
+    }
+
+    // Check for standalone type keywords (datatype, struct, metaclass, alias, classifier)
+    if (STANDALONE_TYPE_KEYWORDS.has(keyword)) {
+        // keyword alone — fall through to read name
+    } else if (keyword === 'use') {
+        // Handle "use case def"
+        w = readWord(line, pos);
+        if (!w || w[0] !== 'case') return undefined;
+        w = readWord(line, w[1]);
+        if (!w || w[0] !== 'def') return undefined;
+        pos = w[1];
+    } else if (DEF_KEYWORDS.has(keyword)) {
+        // Must be followed by "def"
+        w = readWord(line, pos);
+        if (!w || w[0] !== 'def') return undefined;
+        pos = w[1];
+    } else {
+        return undefined;
+    }
+
+    // Skip optional "all"
+    const nameOrAll = readName(line, pos);
+    if (!nameOrAll) return undefined;
+    if (nameOrAll[0] === 'all') {
+        return readName(line, nameOrAll[1])?.[0];
+    }
+    return nameOrAll[0];
+}
 
 /**
- * Regex to extract usage declarations from library files.
- * Matches usage keywords (without `def`) to capture library
- * attribute usages like `attribute mass: MassValue`,
- * `attribute speed: SpeedValue`, etc.
+ * Extract a usage declaration name from a single line.
+ * Matches indented usage declarations like:
+ *   attribute mass: MassValue
+ *   abstract attribute speed: SpeedValue
+ *   use case MyCase : ...
+ * The line must start with exactly 4+ spaces of indentation.
  */
-const USAGE_DECL_RE = /^\s{4}(?:abstract\s+)?(?:attribute|part|port|action|state|item|connection|interface|requirement|constraint|allocation|use\s+case|enum|calc|view|viewpoint|occurrence|ref|flow)\s+'?(\w+)'?\s*(?::|\[|:>|;|\{)/;
+function extractUsageNameFromLine(line: string): string | undefined {
+    // Must start with at least 4 spaces (indented inside a package)
+    if (line.length < 5 || line[0] !== ' ' || line[1] !== ' ' ||
+        line[2] !== ' ' || line[3] !== ' ') {
+        return undefined;
+    }
+
+    let w = readWord(line, 4);
+    if (!w) return undefined;
+    let [keyword, pos] = w;
+
+    // Skip optional "abstract"
+    if (keyword === 'abstract') {
+        w = readWord(line, pos);
+        if (!w) return undefined;
+        [keyword, pos] = w;
+    }
+
+    // Check for usage keyword (no "def")
+    if (keyword === 'use') {
+        w = readWord(line, pos);
+        if (!w || w[0] !== 'case') return undefined;
+        pos = w[1];
+    } else if (!USAGE_KEYWORDS.has(keyword)) {
+        return undefined;
+    }
+
+    // Read the usage name (possibly quoted)
+    const name = readName(line, pos);
+    if (!name) return undefined;
+
+    // Verify followed by :, [, :>, ;, or {
+    const afterPos = skipSpaces(line, name[1]);
+    if (afterPos >= line.length) return undefined;
+    const ch = line[afterPos];
+    if (ch !== ':' && ch !== '[' && ch !== ';' && ch !== '{') return undefined;
+
+    return name[0];
+}
+
+/**
+ * Clean a single line from a doc-comment block, stripping comment
+ * delimiters and leading asterisk decoration.
+ */
+function cleanCommentLine(line: string): string {
+    let s = 0;
+    let e = line.length;
+
+    // Strip leading /***... and whitespace after it
+    if (s < e && line[s] === '/') {
+        s++;
+        while (s < e && line[s] === '*') s++;
+        while (s < e && (line[s] === ' ' || line[s] === '\t')) s++;
+    } else if (s < e && line[s] === '*') {
+        // Strip leading * and optional single space
+        s++;
+        if (s < e && line[s] === ' ') s++;
+    }
+
+    // Strip trailing ***/  and whitespace before it
+    if (e > s && line[e - 1] === '/') {
+        let te = e - 1;
+        while (te > s && line[te - 1] === '*') te--;
+        if (te < e - 1) {
+            e = te;
+            while (e > s && (line[e - 1] === ' ' || line[e - 1] === '\t')) e--;
+        }
+    }
+
+    return line.slice(s, e).trim();
+}
 
 /** Library type location: file URI and 0-based line number. */
 export interface LibraryTypeLocation {
@@ -87,20 +290,17 @@ function buildIndex(libRoot: string): { packages: Map<string, string>; types: Ma
                     closeSync(fd);
 
                     const head = buf.toString('utf8');
-                    const m = PACKAGE_DECL_RE.exec(head);
-                    if (m) {
-                        packages.set(m[1], fileUri);
+                    const pkgName = extractPackageNameFromHead(head);
+                    if (pkgName) {
+                        packages.set(pkgName, fileUri);
                     }
 
                     // Full-file scan for type declarations with line numbers
                     const content = readFileSync(full, 'utf8');
                     const lines = content.split('\n');
-                    // Extract the package name for qualified indexing
-                    const pkgName = m ? m[1] : undefined;
                     for (let i = 0; i < lines.length; i++) {
-                        const tm = TYPE_DECL_RE.exec(lines[i]);
-                        if (tm) {
-                            const typeName = tm[1];
+                        const typeName = extractTypeNameFromLine(lines[i]);
+                        if (typeName) {
                             // Don't overwrite — first match wins (avoids
                             // shadowing by reflective re-declarations)
                             if (!types.has(typeName)) {
@@ -108,9 +308,8 @@ function buildIndex(libRoot: string): { packages: Map<string, string>; types: Ma
                             }
                         }
                         // Also index usage declarations (e.g. attribute mass)
-                        const um = USAGE_DECL_RE.exec(lines[i]);
-                        if (um) {
-                            const usageName = um[1];
+                        const usageName = extractUsageNameFromLine(lines[i]);
+                        if (usageName) {
                             if (!types.has(usageName)) {
                                 types.set(usageName, { uri: fileUri, line: i });
                             }
@@ -305,11 +504,7 @@ export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined 
 
     if (commentLines.length > 0) {
         documentation = commentLines
-            .map(l => l
-                .replace(/^\/\*+\s*/, '')
-                .replace(/\s*\*+\/$/, '')
-                .replace(/^\*\s?/, '')
-                .trim())
+            .map(l => cleanCommentLine(l))
             .filter(l => l.length > 0)
             .join('\n');
     }

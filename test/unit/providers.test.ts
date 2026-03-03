@@ -1136,6 +1136,44 @@ describe('Rename Provider', () => {
         });
         expect(result).not.toBeNull();
     });
+
+    it('should execute rename and return edits', async () => {
+        const { RenameProvider } = await import('../../server/src/providers/renameProvider.js');
+        const { SymbolTable } = await import('../../server/src/symbols/symbolTable.js');
+        const text = `
+package Test {
+    part def Sensor;
+    part mySensor : Sensor;
+}
+`;
+        const { dm } = await setup(text);
+        const uri = 'test://test.sysml';
+
+        const st = new SymbolTable();
+        st.build(uri, dm.get(uri)!);
+        const sensorSym = st.findByName('Sensor')[0];
+        expect(sensorSym).toBeDefined();
+
+        const provider = new RenameProvider(dm);
+        const result = provider.provideRename({
+            textDocument: { uri },
+            position: {
+                line: sensorSym.selectionRange.start.line,
+                character: sensorSym.selectionRange.start.character,
+            },
+            newName: 'Detector',
+        });
+
+        expect(result).toBeDefined();
+        expect(result.changes).toBeDefined();
+        const edits = result.changes![uri];
+        expect(edits).toBeDefined();
+        expect(edits.length).toBeGreaterThanOrEqual(2); // definition + usage
+        // All edits should replace with 'Detector'
+        for (const edit of edits) {
+            expect(edit.newText).toBe('Detector');
+        }
+    });
 });
 
 // ===================================================================
@@ -1156,6 +1194,56 @@ describe('Semantic Tokens Provider', () => {
         expect(tokens.data.length).toBeGreaterThan(0);
         // Token data must be groups of 5 integers
         expect(tokens.data.length % 5).toBe(0);
+    });
+
+    it('should classify keywords with keyword token type', async () => {
+        const { SemanticTokensProvider } = await import('../../server/src/providers/semanticTokensProvider.js');
+        const text = 'package Test { part def Vehicle; }';
+        const { dm } = await setup(text);
+        const uri = 'test://test.sysml';
+
+        const provider = new SemanticTokensProvider(dm);
+        const tokens = provider.provideSemanticTokens({ textDocument: { uri } });
+        expect(tokens.data.length).toBeGreaterThan(0);
+
+        // Token type index 6 = keyword — check at least some tokens are keywords
+        const tokenTypes: number[] = [];
+        for (let i = 3; i < tokens.data.length; i += 5) {
+            tokenTypes.push(tokens.data[i]);
+        }
+        expect(tokenTypes).toContain(6); // keyword type
+    });
+
+    it('should classify numeric literals with number token type', async () => {
+        const { SemanticTokensProvider } = await import('../../server/src/providers/semanticTokensProvider.js');
+        const text = 'package Test { part def V { part w : W[4]; } part def W; }';
+        const { dm } = await setup(text);
+        const uri = 'test://test.sysml';
+
+        const provider = new SemanticTokensProvider(dm);
+        const tokens = provider.provideSemanticTokens({ textDocument: { uri } });
+
+        const tokenTypes: number[] = [];
+        for (let i = 3; i < tokens.data.length; i += 5) {
+            tokenTypes.push(tokens.data[i]);
+        }
+        expect(tokenTypes).toContain(9); // number type
+    });
+
+    it('should classify identifiers with variable token type', async () => {
+        const { SemanticTokensProvider } = await import('../../server/src/providers/semanticTokensProvider.js');
+        const text = 'package Test { part myPart : SomeType; part def SomeType; }';
+        const { dm } = await setup(text);
+        const uri = 'test://test.sysml';
+
+        const provider = new SemanticTokensProvider(dm);
+        const tokens = provider.provideSemanticTokens({ textDocument: { uri } });
+
+        const tokenTypes: number[] = [];
+        for (let i = 3; i < tokens.data.length; i += 5) {
+            tokenTypes.push(tokens.data[i]);
+        }
+        expect(tokenTypes).toContain(3); // variable type
     });
 });
 

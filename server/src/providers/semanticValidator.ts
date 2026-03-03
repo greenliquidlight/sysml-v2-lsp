@@ -36,10 +36,19 @@ const STANDARD_LIBRARY_TYPES = new Set([
 ]);
 
 /**
- * Pattern for ISQ quantity value types (e.g., LengthValue, TorqueValue).
- * These all end in "Value" and come from the ISQ library.
+ * Check for ISQ quantity value types (e.g., LengthValue, TorqueValue).
+ * These start with an uppercase letter, contain only letters, and end in "Value".
  */
-const ISQ_VALUE_PATTERN = /^[A-Z][a-zA-Z]*Value$/;
+function isISQValueType(name: string): boolean {
+    if (!name.endsWith('Value') || name.length < 6) return false;
+    const ch0 = name.charCodeAt(0);
+    if (ch0 < 65 || ch0 > 90) return false; // must start uppercase
+    for (let i = 1; i < name.length; i++) {
+        const c = name.charCodeAt(i);
+        if (!((c >= 65 && c <= 90) || (c >= 97 && c <= 122))) return false;
+    }
+    return true;
+}
 
 /**
  * Semantic validator for SysML v2 documents.
@@ -113,7 +122,7 @@ export class SemanticValidator {
             STANDARD_LIBRARY_TYPES.has(rootSegment) ||
             libraryNames.has(rootSegment) ||
             // Pattern match for ISQ quantity value types (e.g., LengthValue, TorqueValue)
-            ISQ_VALUE_PATTERN.test(symbol.typeName) ||
+            isISQValueType(symbol.typeName) ||
             // Check the scanned library type index (covers all ISQ/SI types including
             // those with digits like CartesianSpatial3dCoordinateFrame)
             resolveLibraryType(symbol.typeName) !== undefined ||
@@ -121,7 +130,7 @@ export class SemanticValidator {
             // Names starting with lowercase are feature references (subsettings
             // via :>), not type references — don't flag them as unresolved types.
             // e.g. "attribute x :> distancePerVolume" references a feature, not a type.
-            /^[a-z]/.test(symbol.typeName)
+            (symbol.typeName.charCodeAt(0) >= 97 && symbol.typeName.charCodeAt(0) <= 122)
         ) {
             return [];
         }
@@ -236,6 +245,7 @@ export class SemanticValidator {
                     message: `Definition '${symbol.name}' should use PascalCase`,
                     source: 'sysml',
                     code: 'naming-convention',
+                    data: { name: symbol.name, convention: 'PascalCase' },
                 }];
             }
         } else {
@@ -248,6 +258,7 @@ export class SemanticValidator {
                     message: `Usage '${symbol.name}' should use camelCase`,
                     source: 'sysml',
                     code: 'naming-convention',
+                    data: { name: symbol.name, convention: 'camelCase' },
                 }];
             }
         }
@@ -268,6 +279,7 @@ export class SemanticValidator {
             message: `Definition '${symbol.name}' has no documentation`,
             source: 'sysml',
             code: 'missing-doc',
+            data: { name: symbol.name },
         }];
     }
 
@@ -292,6 +304,7 @@ export class SemanticValidator {
                     message: `Definition '${def.name}' is not referenced by any usage in this document`,
                     source: 'sysml',
                     code: 'unused-definition',
+                    data: { name: def.name },
                 });
             }
         }

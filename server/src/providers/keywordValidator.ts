@@ -285,6 +285,7 @@ export function validateKeywords(result: ParseResult): Diagnostic[] {
             },
             message,
             source: 'sysml',
+            data: { typo: text, suggestion },
         });
     }
 

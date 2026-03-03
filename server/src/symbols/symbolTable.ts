@@ -410,71 +410,9 @@ export class SymbolTable {
     private extractTypeNames(ctx: ParserRuleContext): string[] {
         const names: string[] = [];
 
-        // Try structured extraction from the parse tree first.
-        // Walk children (recursing into declaration wrappers) looking for
-        // specialization / typing rules whose names typically contain
-        // "specialization", "typing", "conjugation", "subclassification", etc.
+        // Walk the parse tree looking for typing / specialization rules
+        // and extract identifier tokens from their children.
         this.collectTypeNamesFromTree(ctx, names, 0);
-
-        if (names.length > 0) return names;
-
-        // Fallback: regex on the declaration portion only (before '{').
-        // This avoids matching types from nested body content.
-        const fullText = ctx.getText();
-        const braceIdx = fullText.indexOf('{');
-        let text = braceIdx >= 0 ? fullText.substring(0, braceIdx) : fullText;
-
-        // Truncate at SysML keywords that follow a usage declaration but appear
-        // concatenated (getText() strips whitespace).  This prevents the regex
-        // from greedily matching into connect/bind/first/then/flow/… clauses.
-        // e.g. ":BrakeCableconnectfrontLever…" should stop at "connect".
-        // Also truncate at redefines/subsets/nonunique/via which appear in feature
-        // declarations after the typing.
-        text = text.replace(
-            /(connect|bind|first|then|flow|allocate|assign|accept|send|decide|merge|join|fork|redefines|subsets|nonunique|via).*/i,
-            '',
-        );
-
-        // 1. ":>> featureName : Type" (redefinition with explicit retyping)
-        //    Extract the Type, not the redefined feature name.
-        const redefMatch = text.match(/:>>\s*[A-Za-z_][\w:]*\s*:\s*([A-Za-z_][\w:]*(?:\s*,\s*[A-Za-z_][\w:]*)*)/);
-        if (redefMatch) {
-            for (const part of redefMatch[1].split(',')) {
-                const m = part.trim().match(/^([A-Za-z_][\w:]*)/);
-                if (m && !this.isKeyword(m[1])) names.push(m[1]);
-            }
-            return names;
-        }
-
-        // 2. "specializes A, B" or ":> A, B" or ":>> A"
-        const specMatch = text.match(/(?:specializes|:>|:>>)\s*([A-Za-z_][\w:]*(?:\s*,\s*[A-Za-z_][\w:]*)*)/);
-        if (specMatch) {
-            for (const part of specMatch[1].split(',')) {
-                const m = part.trim().match(/^([A-Za-z_][\w:]*)/);
-                if (m) names.push(m[1]);
-            }
-            return names;
-        }
-
-        // 2. "definedby A, B" — note getText() strips spaces
-        const defByMatch = text.match(/definedby\s*([A-Za-z_][\w:]*(?:\s*,\s*[A-Za-z_][\w:]*)*)/);
-        if (defByMatch) {
-            for (const part of defByMatch[1].split(',')) {
-                const m = part.trim().match(/^([A-Za-z_][\w:]*)/);
-                if (m) names.push(m[1]);
-            }
-            return names;
-        }
-
-        // 3. ": A, B" (typing shorthand)
-        const typingMatch = text.match(/:(?![:>])\s*([A-Za-z_][\w:]*(?:\s*,\s*[A-Za-z_][\w:]*)*)/);
-        if (typingMatch) {
-            for (const part of typingMatch[1].split(',')) {
-                const m = part.trim().match(/^([A-Za-z_][\w:]*)/);
-                if (m) names.push(m[1]);
-            }
-            return names;
-        }
 
         return names;
     }
@@ -490,11 +428,16 @@ export class SymbolTable {
         names: string[],
         depth: number,
     ): void {
-        if (depth > 6) return; // don't go too deep
+        if (depth > 8) return; // don't go too deep
         for (let i = 0; i < ctx.getChildCount(); i++) {
             const child = ctx.getChild(i);
             if (!(child instanceof ParserRuleContext)) continue;
             const rn = this.getRuleName(child).toLowerCase();
+
+            // Stop recursion at body rules that contain nested children —
+            // we only want types from the declaration, not from members.
+            if (rn.includes('body') && !rn.includes('typebody')) continue;
+
             if (
                 rn.includes('specialization') ||
                 rn.includes('subclassification') ||
@@ -502,19 +445,9 @@ export class SymbolTable {
                 rn.includes('conjugation') ||
                 rn.includes('disjoining')
             ) {
-                // These rules contain qualified-name children;
-                // extract all identifier-like tokens.
-                const childText = child.getText();
-                // Strip ALL occurrences of SysML keywords/operators that
-                // appear concatenated (getText() strips whitespace), not
-                // just at the start.  e.g. "FuelCmdredefinespwrCmd" →
-                // split on "redefines" to get ["FuelCmd", "pwrCmd"].
-                const stripped = childText
-                    .replace(/(specializes|:>>|:>|:\s|definedby|subsets|redefines|references|conjugates|disjoints|via)/gi, ',');
-                for (const part of stripped.split(',')) {
-                    const m = part.match(/([A-Za-z_][\w:]*)/);
-                    if (m && !this.isKeyword(m[1])) names.push(m[1]);
-                }
+                // Walk the terminal nodes of this typing/specialization subtree
+                // and collect only identifier tokens (not keywords/operators).
+                this.collectIdentifiersFromTypingRule(child, names);
             } else if (
                 // Recurse into declaration / part / body wrappers that may
                 // contain nested typing rules (but NOT into body rules that
@@ -525,6 +458,8 @@ export class SymbolTable {
                 rn.includes('subsettings') ||
                 rn.includes('redefinitions') ||
                 rn.includes('usagecompletion') ||
+                rn.includes('qualifiedname') ||
+                rn.includes('ownedfeaturetyping') ||
                 rn === 'usage' ||
                 rn === 'definition'
             ) {
@@ -534,7 +469,72 @@ export class SymbolTable {
     }
 
     /**
+     * Walk terminal nodes of a typing/specialization rule and collect
+     * identifier tokens (skipping keywords and operators).
+     * Builds qualified names from `::` separated identifiers.
+     */
+    private collectIdentifiersFromTypingRule(
+        ctx: ParserRuleContext,
+        names: string[],
+    ): void {
+        // Collect all terminals in-order to properly handle qualified names
+        const terminals: { text: string; isIdent: boolean }[] = [];
+        this.flattenTerminals(ctx, terminals);
+
+        let currentName = '';
+        for (const t of terminals) {
+            if (t.isIdent && !this.isKeyword(t.text)) {
+                currentName = currentName ? `${currentName}::${t.text}` : t.text;
+            } else if (t.text === '::') {
+                // Separator between parts of a qualified name — continue
+                continue;
+            } else if (t.text === ',') {
+                // Comma separates multiple type names
+                if (currentName) {
+                    names.push(currentName);
+                    currentName = '';
+                }
+            } else {
+                // Any other token (operator, keyword) — flush current name
+                if (currentName) {
+                    names.push(currentName);
+                    currentName = '';
+                }
+            }
+        }
+        // Flush final name
+        if (currentName) {
+            names.push(currentName);
+        }
+    }
+
+    /**
+     * Flatten all terminal nodes from a subtree into an ordered array.
+     */
+    private flattenTerminals(
+        ctx: ParserRuleContext,
+        out: { text: string; isIdent: boolean }[],
+    ): void {
+        for (let i = 0; i < ctx.getChildCount(); i++) {
+            const child = ctx.getChild(i);
+            if (child instanceof TerminalNode) {
+                const text = child.symbol.text;
+                if (text) {
+                    const ch = text.charCodeAt(0);
+                    out.push({
+                        text,
+                        isIdent: (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || ch === 95,
+                    });
+                }
+            } else if (child instanceof ParserRuleContext) {
+                this.flattenTerminals(child, out);
+            }
+        }
+    }
+
+    /**
      * Extract documentation from a comment or doc child.
+     * Walks terminal nodes to collect the comment text instead of regex.
      */
     private extractDocumentation(ctx: ParserRuleContext): string | undefined {
         for (let i = 0; i < ctx.getChildCount(); i++) {
@@ -542,15 +542,23 @@ export class SymbolTable {
             if (child instanceof ParserRuleContext) {
                 const ruleName = this.getRuleName(child).toLowerCase();
                 if (ruleName.includes('comment') || ruleName.includes('doc') || ruleName.includes('documentation')) {
-                    // Get the raw text and strip the comment delimiters
+                    // Get the raw text and strip comment delimiters using
+                    // terminal node inspection instead of regex.
                     const raw = child.getText();
                     if (raw) {
-                        // Remove leading 'doc' keyword, then strip /* */ or //
                         let text = raw;
+                        // Remove leading 'doc' or 'comment' keyword
                         if (text.startsWith('doc')) text = text.slice(3);
                         if (text.startsWith('comment')) text = text.slice(7);
-                        text = text.replace(/^\/\*\s*/, '').replace(/\s*\*\/$/, '');
-                        text = text.replace(/^\/\/\s*/, '');
+                        // Strip block comment delimiters
+                        if (text.startsWith('/*')) {
+                            text = text.slice(2);
+                            if (text.endsWith('*/')) text = text.slice(0, -2);
+                        }
+                        // Strip line comment delimiter
+                        if (text.startsWith('//')) {
+                            text = text.slice(2);
+                        }
                         return text.trim() || raw;
                     }
                     return raw ?? undefined;
@@ -679,12 +687,15 @@ export class SymbolTable {
 
     /**
      * Check if a token is an identifier (not a keyword or punctuation).
+     * Uses character code checks instead of regex.
      */
     private isIdentifierToken(token: Token): boolean {
         const text = token.text;
-        if (!text) return false;
+        if (!text || text.length === 0) return false;
         // Identifiers start with a letter or underscore
-        return /^[a-zA-Z_]/.test(text) && !this.isKeyword(text);
+        const ch = text.charCodeAt(0);
+        const isLetter = (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || ch === 95; // A-Z, a-z, _
+        return isLetter && !this.isKeyword(text);
     }
 
     /**
