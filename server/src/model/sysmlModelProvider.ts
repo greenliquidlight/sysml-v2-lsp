@@ -33,12 +33,9 @@ import type {
     SysMLModelScope,
 } from './sysmlModelTypes.js';
 
-// ── String-based extraction helpers (replacing regex) ──
+import { isIdentPart as isWordChar } from '../utils/identUtils.js';
 
-/** Whether a char code is a word character (letter, digit, or underscore). */
-function isWordChar(ch: number): boolean {
-    return (ch >= 65 && ch <= 90) || (ch >= 97 && ch <= 122) || (ch >= 48 && ch <= 57) || ch === 95;
-}
+// ── String-based extraction helpers (replacing regex) ──
 
 /**
  * Check if `text` contains `word` as a whole word (word-boundary check).
@@ -53,11 +50,6 @@ function containsWord(text: string, word: string): boolean {
         idx += 1;
     }
     return false;
-}
-
-/** Case-insensitive version of containsWord. */
-function _containsWordCI(text: string, word: string): boolean {
-    return containsWord(text.toLowerCase(), word.toLowerCase());
 }
 
 /**
@@ -246,37 +238,38 @@ export class SysMLModelProvider {
         const symbolTable = this._getSymbolTable(uri, parseResult);
 
         const text = this.documentManager.getText(uri) ?? '';
+        const lines = text.split('\n');
 
         const result: SysMLModelResult = { version };
 
         // --- Elements ---
         if (scopeSet.has('elements')) {
-            result.elements = this.convertToElementDTOs(symbolTable, uri, text);
+            result.elements = this.convertToElementDTOs(symbolTable, uri, lines);
         }
 
         // --- Relationships ---
         if (scopeSet.has('relationships')) {
-            result.relationships = this.extractRelationships(symbolTable, uri, text);
+            result.relationships = this.extractRelationships(symbolTable, uri, lines);
         }
 
         // --- Sequence Diagrams ---
         if (scopeSet.has('sequenceDiagrams')) {
-            result.sequenceDiagrams = this.extractSequenceDiagrams(symbolTable, uri);
+            result.sequenceDiagrams = this.extractSequenceDiagrams(symbolTable, uri, lines);
         }
 
         // --- Activity Diagrams ---
         if (scopeSet.has('activityDiagrams')) {
-            result.activityDiagrams = this.extractActivityDiagrams(symbolTable, uri);
+            result.activityDiagrams = this.extractActivityDiagrams(symbolTable, uri, lines);
         }
 
         // --- Resolved Types ---
         if (scopeSet.has('resolvedTypes')) {
-            result.resolvedTypes = this.extractResolvedTypes(symbolTable, uri);
+            result.resolvedTypes = this.extractResolvedTypes(symbolTable, uri, lines);
         }
 
         // --- Semantic Diagnostics ---
         if (scopeSet.has('diagnostics')) {
-            result.diagnostics = this.extractSemanticDiagnostics(symbolTable, uri, text);
+            result.diagnostics = this.extractSemanticDiagnostics(symbolTable, uri);
         }
 
         // --- Stats ---
@@ -286,7 +279,6 @@ export class SysMLModelProvider {
         // not the model-build time which is much smaller on cache hits.
         const parseTimeMs = this.documentManager.getParseTimeMs(uri);
         const timingBreakdown = this.documentManager.getTimingBreakdown(uri);
-        const parseCached = this.documentManager.wasCached();
         const modelBuildTimeMs = Date.now() - startTime;
 
         result.stats = {
@@ -296,7 +288,6 @@ export class SysMLModelProvider {
             parseTimeMs,
             lexTimeMs: timingBreakdown.lexMs,
             parseOnlyTimeMs: timingBreakdown.parseMs,
-            parseCached,
             modelBuildTimeMs,
             complexity: analyseComplexity(allSymbols),
         };
@@ -318,7 +309,7 @@ export class SysMLModelProvider {
     private convertToElementDTOs(
         symbolTable: SymbolTable,
         uri: string,
-        text: string,
+        lines: string[],
     ): SysMLElementDTO[] {
         const symbols = symbolTable.getSymbolsForUri(uri);
 
@@ -343,7 +334,7 @@ export class SysMLModelProvider {
             s => !s.parentQualifiedName || !byQualifiedName.has(s.parentQualifiedName),
         );
 
-        return roots.map(s => this.symbolToElementDTO(s, childrenOf, text));
+        return roots.map(s => this.symbolToElementDTO(s, childrenOf, lines));
     }
 
     /**
@@ -353,14 +344,14 @@ export class SysMLModelProvider {
     private symbolToElementDTO(
         symbol: SysMLSymbol,
         childrenOf: Map<string, SysMLSymbol[]>,
-        text: string,
+        lines: string[],
     ): SysMLElementDTO {
         // Build children recursively from the parent→children index
         const childSymbols = (childrenOf.get(symbol.qualifiedName) ?? [])
             // B1: Filter phantom self-referencing package children
             .filter(c => c.qualifiedName !== symbol.qualifiedName);
         const children: SysMLElementDTO[] = childSymbols.map(c =>
-            this.symbolToElementDTO(c, childrenOf, text),
+            this.symbolToElementDTO(c, childrenOf, lines),
         );
 
         // Build attributes
@@ -382,31 +373,31 @@ export class SysMLModelProvider {
         }
 
         // Extract direction for ports from the source text
-        const direction = this.extractDirection(symbol, text);
+        const direction = this.extractDirection(symbol, lines);
         if (direction) {
             attributes['direction'] = direction;
         }
 
         // Extract multiplicity from the source text
-        const multiplicity = this.extractMultiplicity(symbol, text);
+        const multiplicity = this.extractMultiplicity(symbol, lines);
         if (multiplicity) {
             attributes['multiplicity'] = multiplicity;
         }
 
         // Extract modifiers
-        const modifier = this.extractModifier(symbol, text);
+        const modifier = this.extractModifier(symbol, lines);
         if (modifier) {
             attributes['modifier'] = modifier;
         }
 
         // Extract visibility
-        const visibility = this.extractVisibility(symbol, text);
+        const visibility = this.extractVisibility(symbol, lines);
         if (visibility) {
             attributes['visibility'] = visibility;
         }
 
         // Extract value
-        const value = this.extractValue(symbol, text);
+        const value = this.extractValue(symbol, lines);
         if (value) {
             attributes['value'] = value;
         }
@@ -424,7 +415,7 @@ export class SysMLModelProvider {
         }
 
         // Specialization (detected from text ":>" / "specializes" syntax)
-        const specializations = this.extractSpecializations(symbol, text);
+        const specializations = this.extractSpecializations(symbol, lines);
         for (const spec of specializations) {
             relationships.push({
                 type: 'specializes',
@@ -454,11 +445,10 @@ export class SysMLModelProvider {
     private extractRelationships(
         symbolTable: SymbolTable,
         uri: string,
-        text: string,
+        lines: string[],
     ): RelationshipDTO[] {
         const symbols = symbolTable.getSymbolsForUri(uri);
         const relationships: RelationshipDTO[] = [];
-        const lines = text.split('\n');
 
         for (const symbol of symbols) {
             // Skip packages and imports for relationship extraction —
@@ -484,7 +474,7 @@ export class SysMLModelProvider {
             }
 
             // Specialization (part def X :> Y, Z  or  specializes Y, Z)
-            const specializations = this.extractSpecializations(symbol, text);
+            const specializations = this.extractSpecializations(symbol, lines);
             for (const spec of specializations) {
                 relationships.push({
                     type: 'specializes',
@@ -495,7 +485,7 @@ export class SysMLModelProvider {
 
             // Connection usages create connection relationships
             if (symbol.kind === SysMLElementKind.ConnectionUsage) {
-                const connectionTargets = this.extractConnectionEndpoints(symbol, text);
+                const connectionTargets = this.extractConnectionEndpoints(symbol, lines);
                 if (connectionTargets.length === 2) {
                     relationships.push({
                         type: 'connection',
@@ -508,7 +498,7 @@ export class SysMLModelProvider {
 
             // Allocation usages create allocation relationships
             if (symbol.kind === SysMLElementKind.AllocationUsage) {
-                const allocTargets = this.extractConnectionEndpoints(symbol, text);
+                const allocTargets = this.extractConnectionEndpoints(symbol, lines);
                 if (allocTargets.length === 2) {
                     relationships.push({
                         type: 'allocation',
@@ -543,11 +533,10 @@ export class SysMLModelProvider {
     private extractSequenceDiagrams(
         symbolTable: SymbolTable,
         uri: string,
+        lines: string[],
     ): SequenceDiagramDTO[] {
         const symbols = symbolTable.getSymbolsForUri(uri);
         const diagrams: SequenceDiagramDTO[] = [];
-        const text = this.documentManager.getText(uri) ?? '';
-        const lines = text.split('\n');
         const seen = new Set<string>();
 
         for (const symbol of symbols) {
@@ -696,7 +685,7 @@ export class SysMLModelProvider {
             if (!hasChildActions) continue;
 
             // Extract flows to check if this action has succession patterns
-            const flows = this.extractSuccessions(symbol, text, lines);
+            const flows = this.extractSuccessions(symbol, lines);
             if (flows.length === 0) continue;
 
             // Build participants from child actions (excluding synthetic nodes)
@@ -758,11 +747,10 @@ export class SysMLModelProvider {
     private extractActivityDiagrams(
         symbolTable: SymbolTable,
         uri: string,
+        lines: string[],
     ): ActivityDiagramDTO[] {
         const symbols = symbolTable.getSymbolsForUri(uri);
         const diagrams: ActivityDiagramDTO[] = [];
-        const text = this.documentManager.getText(uri) ?? '';
-        const lines = text.split('\n');
 
         for (const symbol of symbols) {
             // D2: Include both ActionDef and ActionUsage with child actions
@@ -816,7 +804,7 @@ export class SysMLModelProvider {
 
                     // Decision nodes
                     if (actionType === 'decision') {
-                        const branches = this.extractDecisionBranches(child, text);
+                        const branches = this.extractDecisionBranches(child, lines);
                         decisions.push({
                             name: child.name,
                             condition: '',
@@ -842,7 +830,7 @@ export class SysMLModelProvider {
             }
 
             // D1: Extract flows from succession relationships in text
-            const successionFlows = this.extractSuccessions(symbol, text, lines);
+            const successionFlows = this.extractSuccessions(symbol, lines);
             flows.push(...successionFlows);
 
             // D1: Extract decide/if/merge patterns for decisions
@@ -939,10 +927,10 @@ export class SysMLModelProvider {
     private extractResolvedTypes(
         symbolTable: SymbolTable,
         uri: string,
+        lines: string[],
     ): Record<string, ResolvedTypeDTO> {
         const symbols = symbolTable.getSymbolsForUri(uri);
         const result: Record<string, ResolvedTypeDTO> = {};
-        const text = this.documentManager.getText(uri) ?? '';
 
         for (const symbol of symbols) {
             // Only include definitions and typed usages
@@ -951,7 +939,7 @@ export class SysMLModelProvider {
             }
 
             const specializes: string[] = [];
-            const specList = this.extractSpecializations(symbol, text);
+            const specList = this.extractSpecializations(symbol, lines);
             for (const s of specList) {
                 if (!specializes.includes(s)) { specializes.push(s); }
             }
@@ -999,7 +987,6 @@ export class SysMLModelProvider {
     private extractSemanticDiagnostics(
         symbolTable: SymbolTable,
         uri: string,
-        _text: string,
     ): SemanticDiagnosticDTO[] {
         const symbols = symbolTable.getSymbolsForUri(uri);
         const diagnostics: SemanticDiagnosticDTO[] = [];
@@ -1085,11 +1072,10 @@ export class SysMLModelProvider {
     }
 
     /** Extract port direction (in | out | inout) from source text. */
-    private extractDirection(symbol: SysMLSymbol, text: string): string | undefined {
+    private extractDirection(symbol: SysMLSymbol, lines: string[]): string | undefined {
         if (symbol.kind !== SysMLElementKind.PortUsage && symbol.kind !== SysMLElementKind.PortDef) {
             return undefined;
         }
-        const lines = text.split('\n');
         const elementText = this.getElementText(symbol, lines);
         // Check 'inout' first — it contains 'in' and 'out' as substrings
         if (containsWord(elementText, 'inout')) return 'inout';
@@ -1099,8 +1085,7 @@ export class SysMLModelProvider {
     }
 
     /** Extract multiplicity (e.g., [4], [0..*]) from source text. */
-    private extractMultiplicity(symbol: SysMLSymbol, text: string): string | undefined {
-        const lines = text.split('\n');
+    private extractMultiplicity(symbol: SysMLSymbol, lines: string[]): string | undefined {
         const elementText = this.getElementText(symbol, lines);
         const open = elementText.indexOf('[');
         if (open < 0) return undefined;
@@ -1110,8 +1095,7 @@ export class SysMLModelProvider {
     }
 
     /** Extract modifiers (abstract, readonly, derived, etc.) from source text. */
-    private extractModifier(symbol: SysMLSymbol, text: string): string | undefined {
-        const lines = text.split('\n');
+    private extractModifier(symbol: SysMLSymbol, lines: string[]): string | undefined {
         const elementText = this.getElementText(symbol, lines);
         const modifiers: string[] = [];
         if (containsWord(elementText, 'abstract')) modifiers.push('abstract');
@@ -1123,8 +1107,7 @@ export class SysMLModelProvider {
     }
 
     /** Extract visibility (public | private | protected) from source text. */
-    private extractVisibility(symbol: SysMLSymbol, text: string): string | undefined {
-        const lines = text.split('\n');
+    private extractVisibility(symbol: SysMLSymbol, lines: string[]): string | undefined {
         const elementText = this.getElementText(symbol, lines);
         if (containsWord(elementText, 'private')) return 'private';
         if (containsWord(elementText, 'protected')) return 'protected';
@@ -1133,11 +1116,10 @@ export class SysMLModelProvider {
     }
 
     /** Extract default/assigned value from source text. */
-    private extractValue(symbol: SysMLSymbol, text: string): string | undefined {
+    private extractValue(symbol: SysMLSymbol, lines: string[]): string | undefined {
         if (symbol.kind !== SysMLElementKind.AttributeUsage) {
             return undefined;
         }
-        const lines = text.split('\n');
         const elementText = this.getElementText(symbol, lines);
         // Find the first `=` (optionally preceded by `:` for `:=`)
         const eqIdx = elementText.indexOf('=');
@@ -1163,8 +1145,7 @@ export class SysMLModelProvider {
     }
 
     /** Extract all specialization targets from `:>` or `specializes` syntax. */
-    private extractSpecializations(symbol: SysMLSymbol, text: string): string[] {
-        const lines = text.split('\n');
+    private extractSpecializations(symbol: SysMLSymbol, lines: string[]): string[] {
         const elementText = this.getElementText(symbol, lines);
 
         // Match `:>` syntax — find ':>' then read comma-separated identifiers
@@ -1188,8 +1169,7 @@ export class SysMLModelProvider {
     }
 
     /** Extract connection endpoints from `connect` syntax. */
-    private extractConnectionEndpoints(symbol: SysMLSymbol, text: string): string[] {
-        const lines = text.split('\n');
+    private extractConnectionEndpoints(symbol: SysMLSymbol, lines: string[]): string[] {
         const elementText = this.getElementText(symbol, lines);
         const endpoints: string[] = [];
 
@@ -1269,9 +1249,8 @@ export class SysMLModelProvider {
     /** Extract decision branches from decision node text. */
     private extractDecisionBranches(
         symbol: SysMLSymbol,
-        text: string,
+        lines: string[],
     ): { condition: string; target: string }[] {
-        const lines = text.split('\n');
         const elementText = this.getElementText(symbol, lines);
         const branches: { condition: string; target: string }[] = [];
 
@@ -1318,7 +1297,6 @@ export class SysMLModelProvider {
      */
     private extractSuccessions(
         parent: SysMLSymbol,
-        _text: string,
         lines: string[],
     ): ControlFlowDTO[] {
         const elementText = this.getFullElementText(parent, lines);

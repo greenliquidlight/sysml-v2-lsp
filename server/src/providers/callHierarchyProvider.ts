@@ -10,8 +10,8 @@ import {
     Position,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
 import { SysMLElementKind, SysMLSymbol } from '../symbols/sysmlElements.js';
+import { isIdentPart as isWordChar } from '../utils/identUtils.js';
 
 /**
  * Action-related keywords that create "call" relationships in SysML.
@@ -26,10 +26,6 @@ const CALL_KEYWORDS = new Set([
 const USAGE_KEYWORDS = ['action', 'state', 'calc'];
 
 // ---- String scanning helpers ----
-
-function isWordChar(code: number): boolean {
-    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 95;
-}
 
 function skipWS(text: string, pos: number): number {
     while (pos < text.length && (text[pos] === ' ' || text[pos] === '\t' || text[pos] === '\n' || text[pos] === '\r')) pos++;
@@ -180,7 +176,6 @@ function positionToOffset(text: string, pos: Position): number {
  *  - "Called by" = which actions perform/include/compose this one
  */
 export class CallHierarchyProvider {
-    private symbolTable = new SymbolTable();
 
     constructor(private documentManager: DocumentManager) { }
 
@@ -189,9 +184,9 @@ export class CallHierarchyProvider {
         const result = this.documentManager.get(uri);
         if (!result) return null;
 
-        this.symbolTable.build(uri, result);
+        const symbolTable = this.documentManager.getWorkspaceSymbolTable();
 
-        const symbol = this.symbolTable.findSymbolAtPosition(uri, params.position.line, params.position.character);
+        const symbol = symbolTable.findSymbolAtPosition(uri, params.position.line, params.position.character);
         if (!symbol) return null;
 
         // Call hierarchy makes sense for actions, states, and similar behavioral elements
@@ -208,7 +203,7 @@ export class CallHierarchyProvider {
     }
 
     provideIncomingCalls(params: CallHierarchyIncomingCallsParams): CallHierarchyIncomingCall[] {
-        this.buildAllSymbols();
+        const symbolTable = this.documentManager.getWorkspaceSymbolTable();
         const item = params.item;
         const targetName = item.name;
         const incoming: CallHierarchyIncomingCall[] = [];
@@ -217,7 +212,7 @@ export class CallHierarchyProvider {
             const text = this.documentManager.getText(uri);
             if (!text) continue;
 
-            const symbols = this.symbolTable.getSymbolsForUri(uri);
+            const symbols = symbolTable.getSymbolsForUri(uri);
 
             // 1. Explicit call keywords: `perform Brake`, `accept Accelerate`, etc.
             for (const keyword of CALL_KEYWORDS) {
@@ -260,7 +255,7 @@ export class CallHierarchyProvider {
 
     provideOutgoingCalls(params: CallHierarchyOutgoingCallsParams): CallHierarchyOutgoingCall[] {
         const item = params.item;
-        this.buildAllSymbols();
+        const symbolTable = this.documentManager.getWorkspaceSymbolTable();
 
         const fullText = this.documentManager.getText(item.uri);
         if (!fullText) return [];
@@ -268,7 +263,7 @@ export class CallHierarchyProvider {
         const outgoing: CallHierarchyOutgoingCall[] = [];
 
         // Find the symbol body range
-        const symbols = this.symbolTable.getSymbolsForUri(item.uri);
+        const symbols = symbolTable.getSymbolsForUri(item.uri);
         const sym = symbols.find(s =>
             s.name === item.name &&
             s.selectionRange.start.line === item.selectionRange.start.line
@@ -282,7 +277,7 @@ export class CallHierarchyProvider {
         // 1. Explicit call keywords: `perform Brake`, `accept Accelerate`, etc.
         for (const keyword of CALL_KEYWORDS) {
             for (const m of findKeywordCallees(bodyText, keyword)) {
-                const targets = this.symbolTable.findByName(m.calledName);
+                const targets = symbolTable.findByName(m.calledName);
 
                 if (targets.length > 0) {
                     const absOffset = startOffset + m.index;
@@ -299,7 +294,7 @@ export class CallHierarchyProvider {
 
         // 2. Typed usages: `action foo : TypeDef` — composition is a call
         for (const m of findTypedUsageCallees(bodyText, USAGE_KEYWORDS)) {
-            const targets = this.symbolTable.findByName(m.calledName);
+            const targets = symbolTable.findByName(m.calledName);
             if (targets.length > 0) {
                 const absOffset = startOffset + m.index;
                 outgoing.push({
@@ -313,15 +308,6 @@ export class CallHierarchyProvider {
         }
 
         return outgoing;
-    }
-
-    private buildAllSymbols(): void {
-        for (const uri of this.documentManager.getUris()) {
-            const result = this.documentManager.get(uri);
-            if (result) {
-                this.symbolTable.build(uri, result);
-            }
-        }
     }
 
     private findEnclosingBehavioral(symbols: SysMLSymbol[], line: number, skip = 0): SysMLSymbol | undefined {

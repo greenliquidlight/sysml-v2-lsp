@@ -14,14 +14,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * user-specified custom path) for `.sysml` / `.kerml` files.
  */
 
-// ---- String scanning helpers ----
-
-function isWordChar(code: number): boolean {
-    return (code >= 65 && code <= 90)   // A-Z
-        || (code >= 97 && code <= 122)  // a-z
-        || (code >= 48 && code <= 57)   // 0-9
-        || code === 95;                 // _
-}
+import { isIdentPart as isWordChar } from '../utils/identUtils.js';
 
 function skipSpaces(line: string, pos: number): number {
     while (pos < line.length && (line[pos] === ' ' || line[pos] === '\t')) pos++;
@@ -439,23 +432,28 @@ export interface LibraryHoverInfo {
     documentation?: string;
 }
 
-/**
- * Extract hover information for a library element by reading the
- * declaration line and any preceding doc-comment from disk.
- *
- * @param name  Simple or qualified name (e.g. "mass", "ISQ::mass")
- * @returns Hover info or `undefined` if not in the library.
- */
-export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined {
-    const loc = resolveLibraryType(name);
-    if (!loc) return undefined;
+// ---- Caches for library file content and hover info ----
 
-    // Convert file URI back to a filesystem path.
-    // fileURLToPath properly decodes percent-encoded characters
-    // (e.g. %20 → space) that appear in paths like "Domain Libraries".
+/** Cache of library file contents keyed by file URI — library files never change at runtime. */
+const fileContentCache = new Map<string, string[]>();
+
+/** Maximum number of cached file contents (simple LRU by eviction). */
+const FILE_CACHE_MAX = 50;
+
+/** Cache of hover info results keyed by name. */
+const hoverInfoCache = new Map<string, LibraryHoverInfo | null>();
+
+/** Maximum number of cached hover info results. */
+const HOVER_CACHE_MAX = 200;
+
+/** Read and cache library file lines. Returns undefined on I/O error. */
+function getCachedFileLines(uri: string): string[] | undefined {
+    const cached = fileContentCache.get(uri);
+    if (cached) return cached;
+
     let filePath: string;
     try {
-        filePath = fileURLToPath(loc.uri);
+        filePath = fileURLToPath(uri);
     } catch {
         return undefined;
     }
@@ -468,6 +466,43 @@ export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined 
     }
 
     const lines = content.split('\n');
+
+    // Evict oldest entry if cache is full
+    if (fileContentCache.size >= FILE_CACHE_MAX) {
+        const firstKey = fileContentCache.keys().next().value;
+        if (firstKey !== undefined) fileContentCache.delete(firstKey);
+    }
+    fileContentCache.set(uri, lines);
+    return lines;
+}
+
+/**
+ * Extract hover information for a library element by reading the
+ * declaration line and any preceding doc-comment from disk.
+ * Results are cached — library files are immutable at runtime.
+ *
+ * @param name  Simple or qualified name (e.g. "mass", "ISQ::mass")
+ * @returns Hover info or `undefined` if not in the library.
+ */
+export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined {
+    // Check hover result cache first
+    if (hoverInfoCache.has(name)) {
+        return hoverInfoCache.get(name) ?? undefined;
+    }
+
+    const loc = resolveLibraryType(name);
+    if (!loc) {
+        // Cache negative result too
+        if (hoverInfoCache.size >= HOVER_CACHE_MAX) {
+            const firstKey = hoverInfoCache.keys().next().value;
+            if (firstKey !== undefined) hoverInfoCache.delete(firstKey);
+        }
+        hoverInfoCache.set(name, null);
+        return undefined;
+    }
+
+    const lines = getCachedFileLines(loc.uri);
+    if (!lines) return undefined;
     const declLine = (lines[loc.line] ?? '').trim();
 
     // Try to find the containing package name from the index
@@ -509,9 +544,18 @@ export function getLibraryHoverInfo(name: string): LibraryHoverInfo | undefined 
             .join('\n');
     }
 
-    return {
+    const result: LibraryHoverInfo = {
         declaration: declLine,
         packageName,
         documentation,
     };
+
+    // Cache the result
+    if (hoverInfoCache.size >= HOVER_CACHE_MAX) {
+        const firstKey = hoverInfoCache.keys().next().value;
+        if (firstKey !== undefined) hoverInfoCache.delete(firstKey);
+    }
+    hoverInfoCache.set(name, result);
+
+    return result;
 }

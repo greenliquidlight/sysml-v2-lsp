@@ -6,13 +6,7 @@ import {
     Range,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
-
-// ---- String scanning helpers ----
-
-function isWordChar(code: number): boolean {
-    return (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 95;
-}
+import { isIdentPart as isWordChar } from '../utils/identUtils.js';
 
 /** Find all positions where `word` appears at word boundaries in `line`. */
 function findWordOccurrences(line: string, word: string): number[] {
@@ -35,7 +29,6 @@ function findWordOccurrences(line: string, word: string): number[] {
  * Renames a symbol and updates all references within the document.
  */
 export class RenameProvider {
-    private symbolTable = new SymbolTable();
 
     constructor(private documentManager: DocumentManager) { }
 
@@ -43,12 +36,10 @@ export class RenameProvider {
      * Check if the token at position is renameable and return its range.
      */
     prepareRename(params: TextDocumentPositionParams): Range | null {
-        const result = this.documentManager.get(params.textDocument.uri);
-        if (!result) return null;
+        const symbolTable = this.documentManager.getSymbolTable(params.textDocument.uri);
+        if (!symbolTable) return null;
 
-        this.symbolTable.build(params.textDocument.uri, result);
-
-        const symbol = this.symbolTable.findSymbolAtPosition(
+        const symbol = symbolTable.findSymbolAtPosition(
             params.textDocument.uri,
             params.position.line,
             params.position.character,
@@ -63,12 +54,10 @@ export class RenameProvider {
      * Perform the rename — update the symbol and all references.
      */
     provideRename(params: RenameParams): WorkspaceEdit | null {
-        const result = this.documentManager.get(params.textDocument.uri);
-        if (!result) return null;
+        const symbolTable = this.documentManager.getSymbolTable(params.textDocument.uri);
+        if (!symbolTable) return null;
 
-        this.symbolTable.build(params.textDocument.uri, result);
-
-        const symbol = this.symbolTable.findSymbolAtPosition(
+        const symbol = symbolTable.findSymbolAtPosition(
             params.textDocument.uri,
             params.position.line,
             params.position.character,
@@ -85,7 +74,7 @@ export class RenameProvider {
         const newName = params.newName;
 
         // Find all references by name match
-        const references = this.symbolTable.findReferences(oldName);
+        const references = symbolTable.findReferences(oldName);
         for (const ref of references) {
             if (ref.uri === params.textDocument.uri) {
                 edits.push({

@@ -99,23 +99,29 @@ const DEFINITION_KEYWORDS: ReadonlySet<string> = new Set([
     'view', 'viewpoint', 'when', 'while',
 ]);
 
+/** Two-row Levenshtein — O(min(m,n)) space. */
 function levenshtein(a: string, b: string): number {
+    if (a.length < b.length) { const t = a; a = b; b = t; }
     const m = a.length;
     const n = b.length;
-    const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
+
+    let prev = new Uint16Array(n + 1);
+    let curr = new Uint16Array(n + 1);
+    for (let j = 0; j <= n; j++) prev[j] = j;
+
     for (let i = 1; i <= m; i++) {
+        curr[0] = i;
         for (let j = 1; j <= n; j++) {
-            const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-            dp[i][j] = Math.min(
-                dp[i - 1][j] + 1,
-                dp[i][j - 1] + 1,
-                dp[i - 1][j - 1] + cost,
+            const cost = a.charCodeAt(i - 1) === b.charCodeAt(j - 1) ? 0 : 1;
+            curr[j] = Math.min(
+                prev[j] + 1,
+                curr[j - 1] + 1,
+                prev[j - 1] + cost,
             );
         }
+        [prev, curr] = [curr, prev];
     }
-    return dp[m][n];
+    return prev[n];
 }
 
 function findClosestKeyword(identifier: string): string | undefined {
@@ -334,19 +340,12 @@ const SEMANTIC_KEYWORDS = new Set([
 ]);
 
 // Semantic token type indices — must match the legend in semanticTokensProvider.ts
-const _ST_NAMESPACE = 0;
-const _ST_TYPE = 1;
-const _ST_CLASS = 2;
 const ST_VARIABLE = 3;
-const _ST_PROPERTY = 4;
-const _ST_FUNCTION = 5;
 const ST_KEYWORD = 6;
 const ST_COMMENT = 7;
 const ST_STRING = 8;
 const ST_NUMBER = 9;
 const ST_OPERATOR = 10;
-const _ST_ENUM = 11;
-const _ST_INTERFACE = 12;
 
 /** Lexer token types that map to the "operator" semantic token. */
 const OPERATOR_TOKENS = new Set([

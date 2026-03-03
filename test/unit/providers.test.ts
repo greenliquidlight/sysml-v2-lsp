@@ -4,7 +4,7 @@
  * Uses dynamic imports so vscode-languageserver and
  * vscode-languageserver-textdocument resolve from server/node_modules.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers

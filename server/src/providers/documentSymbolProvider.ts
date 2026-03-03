@@ -1,9 +1,8 @@
 import {
-    DocumentSymbolParams,
     DocumentSymbol,
+    DocumentSymbolParams,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
 import { SysMLSymbol, toMetaclassName } from '../symbols/sysmlElements.js';
 import { toSysMLSymbolKind } from './symbolKindMapping.js';
 
@@ -12,21 +11,17 @@ import { toSysMLSymbolKind } from './symbolKindMapping.js';
  * Walks the symbol table and builds a hierarchical DocumentSymbol tree.
  */
 export class DocumentSymbolProvider {
-    private symbolTable = new SymbolTable();
 
-    constructor(private documentManager: DocumentManager) {}
+    constructor(private documentManager: DocumentManager) { }
 
     provideDocumentSymbols(params: DocumentSymbolParams): DocumentSymbol[] {
-        const result = this.documentManager.get(params.textDocument.uri);
-        if (!result) {
+        const symbolTable = this.documentManager.getSymbolTable(params.textDocument.uri);
+        if (!symbolTable) {
             return [];
         }
 
-        // Build symbol table
-        this.symbolTable.build(params.textDocument.uri, result);
-
         // Get all symbols for this document
-        const symbols = this.symbolTable.getSymbolsForUri(params.textDocument.uri);
+        const symbols = symbolTable.getSymbolsForUri(params.textDocument.uri);
 
         // Build hierarchical structure
         return this.buildHierarchy(symbols);

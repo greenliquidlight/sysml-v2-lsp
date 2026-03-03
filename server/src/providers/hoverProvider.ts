@@ -1,31 +1,27 @@
 import {
-    TextDocumentPositionParams,
     Hover,
     MarkupContent,
     MarkupKind,
+    TextDocumentPositionParams,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
 import { getLibraryHoverInfo } from '../library/libraryIndex.js';
 import { toMetaclassName } from '../symbols/sysmlElements.js';
+import { extractQualifiedNameAt } from '../utils/identUtils.js';
 
 /**
  * Provides hover information for SysML elements.
  * Shows element kind, type, and documentation on hover.
  */
 export class HoverProvider {
-    private symbolTable = new SymbolTable();
 
     constructor(private documentManager: DocumentManager) { }
 
     provideHover(params: TextDocumentPositionParams): Hover | null {
-        const result = this.documentManager.get(params.textDocument.uri);
-        if (!result) {
+        const symbolTable = this.documentManager.getSymbolTable(params.textDocument.uri);
+        if (!symbolTable) {
             return null;
         }
-
-        // Build symbol table for this document
-        this.symbolTable.build(params.textDocument.uri, result);
 
         // Try to extract the word at hover position (for qualified name lookup)
         const text = this.documentManager.getText(params.textDocument.uri);
@@ -41,7 +37,7 @@ export class HoverProvider {
         }
 
         // Find symbol at hover position
-        const symbol = this.symbolTable.findSymbolAtPosition(
+        const symbol = symbolTable.findSymbolAtPosition(
             params.textDocument.uri,
             params.position.line,
             params.position.character,
@@ -139,6 +135,7 @@ export class HoverProvider {
 
     /**
      * Extract the word (simple or qualified) at a text position.
+     * Scans for identifier segments separated by '::' without regex.
      */
     private getWordAtPosition(text: string, line: number, character: number): string | undefined {
         const lines = text.split('\n');
@@ -147,16 +144,8 @@ export class HoverProvider {
         const lineText = lines[line];
         if (character >= lineText.length) return undefined;
 
-        const qualifiedPattern = /[a-zA-Z_]\w*(?:::[a-zA-Z_]\w*)*/g;
-        let match: RegExpExecArray | null;
-        while ((match = qualifiedPattern.exec(lineText)) !== null) {
-            const start = match.index;
-            const end = start + match[0].length;
-            if (character >= start && character <= end) {
-                return match[0];
-            }
-        }
-
-        return undefined;
+        return extractQualifiedNameAt(lineText, character);
     }
 }
+
+

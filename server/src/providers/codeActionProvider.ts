@@ -20,7 +20,7 @@ import { DocumentManager } from '../documentManager.js';
  *  - Unused definition: prefix with underscore to suppress
  */
 export class CodeActionProvider {
-    constructor(private readonly documentManager: DocumentManager) {}
+    constructor(private readonly documentManager: DocumentManager) { }
 
     /**
      * Return code actions for the given range, typically in response to

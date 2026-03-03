@@ -1,9 +1,8 @@
 import {
-    WorkspaceSymbolParams,
     SymbolInformation,
+    WorkspaceSymbolParams,
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
 import { toSysMLSymbolKind } from './symbolKindMapping.js';
 
 /**
@@ -13,22 +12,14 @@ import { toSysMLSymbolKind } from './symbolKindMapping.js';
  * fuzzy filtering by name.
  */
 export class WorkspaceSymbolProvider {
-    private symbolTable = new SymbolTable();
 
     constructor(private documentManager: DocumentManager) { }
 
     provideWorkspaceSymbols(params: WorkspaceSymbolParams): SymbolInformation[] {
         const query = params.query.toLowerCase();
 
-        // Build symbol tables for all cached documents
-        for (const uri of this.documentManager.getUris()) {
-            const result = this.documentManager.get(uri);
-            if (result) {
-                this.symbolTable.build(uri, result);
-            }
-        }
-
-        const allSymbols = this.symbolTable.getAllSymbols();
+        const symbolTable = this.documentManager.getWorkspaceSymbolTable();
+        const allSymbols = symbolTable.getAllSymbols();
         const results: SymbolInformation[] = [];
 
         for (const sym of allSymbols) {

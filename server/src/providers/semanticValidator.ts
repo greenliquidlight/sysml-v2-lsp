@@ -1,7 +1,6 @@
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
 import { getLibraryPackageNames, resolveLibraryType } from '../library/libraryIndex.js';
-import { SymbolTable } from '../symbols/symbolTable.js';
 import { SysMLElementKind, SysMLSymbol, isDefinition } from '../symbols/sysmlElements.js';
 
 /**
@@ -67,13 +66,9 @@ export class SemanticValidator {
      * Run all semantic validation rules and return LSP Diagnostic objects.
      */
     validate(uri: string): Diagnostic[] {
-        const parseResult = this.documentManager.get(uri);
-        if (!parseResult) return [];
+        const symbolTable = this.documentManager.getSymbolTable(uri);
+        if (!symbolTable) return [];
 
-        const symbolTable = new SymbolTable();
-        symbolTable.build(uri, parseResult);
-
-        const _text = this.documentManager.getText(uri) ?? '';
         const symbols = symbolTable.getSymbolsForUri(uri);
         const allSymbolNames = new Set(symbolTable.getAllSymbols().map(s => s.name));
         const libraryNames = new Set(getLibraryPackageNames());

@@ -1007,7 +1007,7 @@ package WarmUp {
         attribute hastype = z hastype String;
         attribute select = items.>filter(x | x > 0);
         attribute collect = items->collect(x | x.name);
-        attribute all = all v : Vehicle {| v.mass > 0 |}; 
+        attribute all = all v : Vehicle {| v.mass > 0 |};
     }
 
     // ---- Assignment actions ----
@@ -1018,5 +1018,21 @@ package WarmUp {
             assign x := if x > 10 ? 0 : x;
         }
     }
+
+    // ---- Bare item usages & defined by ----
+    // These constructs must be in the warmup text to ensure the DFA
+    // snapshot covers their token transitions.
+    part def DefinedByPart {
+        item myItem;
+        item namedItem : ItemType;
+        part sub defined by SubDef, AltDef;
+        part multi : TypeA, TypeB;
+    }
+    item def ItemType;
+    part def SubDef;
+    part def AltDef;
+    part def TypeA;
+    part def TypeB;
+
 }
 `;

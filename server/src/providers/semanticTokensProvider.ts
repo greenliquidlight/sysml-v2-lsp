@@ -5,6 +5,7 @@ import {
 } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
 import { SysMLv2Lexer } from '../generated/SysMLv2Lexer.js';
+import { SYSML_KEYWORDS } from '../utils/sysmlKeywords.js';
 
 /** Lexer token types that map to the "operator" semantic token. */
 const OPERATOR_TOKENS = new Set([
@@ -41,6 +42,15 @@ const PUNCTUATION_TOKENS = new Set([
     SysMLv2Lexer.LBRACK,        // [
     SysMLv2Lexer.RBRACK,        // ]
     SysMLv2Lexer.COLON,         // :
+]);
+
+/** Module-level keyword sets — allocated once, shared by all provider instances. */
+const STRUCTURAL_KEYWORDS = new Set([
+    'part', 'port', 'item', 'state', 'constraint', 'requirement',
+    'concern', 'case', 'view', 'viewpoint', 'rendering',
+    'allocation', 'connection', 'interface', 'occurrence',
+    'individual', 'flow', 'binding', 'succession', 'metadata',
+    'enum', 'actor', 'subject', 'ref', 'use',
 ]);
 
 /**
@@ -193,38 +203,10 @@ export class SemanticTokensProvider {
      * Keywords that precede member/instance names in usage declarations.
      */
     private isStructuralKeyword(text: string): boolean {
-        const structural = new Set([
-            'part', 'port', 'item', 'state', 'constraint', 'requirement',
-            'concern', 'case', 'view', 'viewpoint', 'rendering',
-            'allocation', 'connection', 'interface', 'occurrence',
-            'individual', 'flow', 'binding', 'succession', 'metadata',
-            'enum', 'actor', 'subject', 'ref', 'use',
-        ]);
-        return structural.has(text);
+        return STRUCTURAL_KEYWORDS.has(text);
     }
 
     private isKeyword(text: string): boolean {
-        const keywords = new Set([
-            'about', 'abstract', 'accept', 'action', 'actor', 'after', 'alias',
-            'all', 'allocate', 'allocation', 'analysis', 'and', 'as', 'assert',
-            'assign', 'assume', 'attribute', 'bind', 'binding', 'bool', 'by',
-            'calc', 'case', 'comment', 'concern', 'connect', 'connection',
-            'constraint', 'decide', 'def', 'default', 'defined', 'dependency',
-            'derived', 'do', 'doc', 'else', 'end', 'entry', 'enum', 'event',
-            'exhibit', 'exit', 'expose', 'false', 'feature', 'filter', 'first',
-            'flow', 'for', 'fork', 'frame', 'from', 'hastype', 'if', 'implies',
-            'import', 'in', 'include', 'individual', 'inout', 'interface',
-            'istype', 'item', 'join', 'language', 'library', 'locale', 'merge',
-            'message', 'meta', 'metadata', 'multiplicity', 'namespace', 'nonunique',
-            'not', 'null', 'objective', 'occurrence', 'of', 'or', 'ordered', 'out',
-            'package', 'parallel', 'part', 'perform', 'port', 'private',
-            'protected', 'public', 'readonly', 'redefines', 'ref', 'references',
-            'render', 'rendering', 'rep', 'require', 'requirement', 'return',
-            'satisfy', 'send', 'snapshot', 'specializes', 'stakeholder', 'state',
-            'subject', 'subsets', 'succession', 'then', 'timeslice', 'to', 'transition',
-            'true', 'type', 'use', 'variant', 'variation', 'verification', 'verify',
-            'view', 'viewpoint', 'when', 'while', 'xor',
-        ]);
-        return keywords.has(text);
+        return SYSML_KEYWORDS.has(text);
     }
 }
