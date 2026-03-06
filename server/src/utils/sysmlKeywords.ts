@@ -1,31 +1,19 @@
 /**
- * Canonical SysML v2 keyword list — single source of truth.
+ * Canonical SysML v2 keyword list — derived from the ANTLR grammar.
  *
- * Previously duplicated in symbolTable.ts, mcpCore.ts,
- * and semanticTokensProvider.ts.  Import from here instead.
+ * Extracts keyword strings from the generated lexer's `literalNames`
+ * so there is a single source of truth (the .g4 grammar file) and
+ * the list never drifts out of sync.
  */
 
-export const SYSML_KEYWORDS_ARRAY = [
-    'about', 'abstract', 'accept', 'action', 'actor', 'after', 'alias',
-    'all', 'allocate', 'allocation', 'analysis', 'and', 'as', 'assert',
-    'assign', 'assume', 'attribute', 'bind', 'binding', 'bool', 'by',
-    'calc', 'case', 'comment', 'concern', 'connect', 'connection',
-    'constraint', 'decide', 'def', 'default', 'defined', 'dependency',
-    'derived', 'do', 'doc', 'else', 'end', 'entry', 'enum', 'event',
-    'exhibit', 'exit', 'expose', 'false', 'feature', 'filter', 'first',
-    'flow', 'for', 'fork', 'frame', 'from', 'hastype', 'if', 'implies',
-    'import', 'in', 'include', 'individual', 'inout', 'interface',
-    'istype', 'item', 'join', 'language', 'library', 'locale', 'merge',
-    'message', 'meta', 'metadata', 'multiplicity', 'namespace', 'nonunique',
-    'not', 'null', 'objective', 'occurrence', 'of', 'or', 'ordered', 'out',
-    'package', 'parallel', 'part', 'perform', 'port', 'private',
-    'protected', 'public', 'readonly', 'redefines', 'ref', 'references',
-    'render', 'rendering', 'rep', 'require', 'requirement', 'return',
-    'satisfy', 'send', 'snapshot', 'specializes', 'stakeholder', 'state',
-    'subject', 'subsets', 'succession', 'then', 'timeslice', 'to', 'transition',
-    'true', 'type', 'use', 'variant', 'variation', 'verification', 'verify',
-    'via', 'view', 'viewpoint', 'when', 'while', 'xor',
-] as const;
+import { SysMLv2Lexer } from '../generated/SysMLv2Lexer.js';
+
+/** All keywords extracted from the generated lexer (alphabetically sorted). */
+export const SYSML_KEYWORDS_ARRAY: readonly string[] = SysMLv2Lexer.literalNames
+    .filter((n): n is string => n != null)
+    .map(n => n.replace(/^'|'$/g, ''))
+    .filter(n => /^[a-z]+$/.test(n))
+    .sort();
 
 /** Fast O(1) keyword lookup. */
 export const SYSML_KEYWORDS: ReadonlySet<string> = new Set(SYSML_KEYWORDS_ARRAY);
