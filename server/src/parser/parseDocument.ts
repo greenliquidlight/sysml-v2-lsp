@@ -33,13 +33,22 @@ export interface ParseResult {
  *
  * If the DFA has been pre-seeded from a snapshot and the parser
  * throws a TypeError (uncovered edge), the DFA is cleared and the
- * parse retried.  The snapshot is generated from comprehensive
- * example files and covers virtually all grammar constructs, so
- * this safety net should rarely fire.
+ * parse retried.  Additionally, if the pre-seeded DFA produces
+ * parse errors, we retry once with a cleared DFA to rule out
+ * stale snapshot edges producing bogus errors (issue #15).
  */
 export function parseDocument(text: string): ParseResult {
     try {
-        return parseDocumentCore(text);
+        const result = parseDocumentCore(text);
+        // If errors occurred and DFA is pre-seeded, the snapshot may
+        // be stale — a missing edge in the pre-seeded DFA produces
+        // an ERROR alternative instead of a TypeError.  Retry once
+        // with the DFA cleared so the ATN can build correct edges.
+        if (result.errors.length > 0 && isDfaPreSeeded()) {
+            clearPreSeededDFA();
+            return parseDocumentCore(text);
+        }
+        return result;
     } catch (e: unknown) {
         if (isDfaPreSeeded() && e instanceof TypeError) {
             // Pre-seeded DFA hit a token pattern it doesn't cover.
