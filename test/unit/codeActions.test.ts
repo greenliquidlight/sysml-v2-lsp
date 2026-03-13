@@ -218,6 +218,94 @@ describe('Code Actions — Unused Definition', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────
+// New semantic quick fixes
+// ─────────────────────────────────────────────────────────────────
+
+describe('Code Actions — Redefinition Multiplicity', () => {
+    it('should offer to align multiplicity with base feature', async () => {
+        const uri = 'file:///test.sysml';
+        const text = `package Test {
+    part def Wheel;
+    part def Vehicle {
+        part wheel : Wheel[0..1];
+    }
+    part def SportsCar :> Vehicle {
+        part wheel :>> wheel[2];
+    }
+}`;
+
+        const { diagnostics } = await getSemanticDiagnostics(text, uri);
+        const redefDiag = diagnostics.filter(d => d.code === 'invalid-redefinition-multiplicity');
+        expect(redefDiag.length).toBeGreaterThanOrEqual(1);
+
+        const { provider } = await makeProvider(text, uri);
+        const actions = provider.provideCodeActions(makeParams(uri, redefDiag));
+        const fix = actions.find(a => a.title.includes('Align multiplicity with base'));
+
+        expect(fix).toBeDefined();
+        expect(fix!.edit?.changes?.[uri]?.length).toBeGreaterThan(0);
+    });
+});
+
+describe('Code Actions — Incompatible Port Types', () => {
+    it('should suggest replacing endpoint with a compatible local port', async () => {
+        const uri = 'file:///test.sysml';
+        const text = `package Test {
+    port def FuelPort;
+    port def ElectricalPort;
+
+    part def Car {
+        port fuel : FuelPort;
+        port altFuel : FuelPort;
+        port power : ElectricalPort;
+
+        connection c1 connect fuel to power;
+    }
+}`;
+
+        const { diagnostics } = await getSemanticDiagnostics(text, uri);
+        const portDiag = diagnostics.filter(d => d.code === 'incompatible-port-types');
+        expect(portDiag.length).toBeGreaterThanOrEqual(1);
+
+        const { provider } = await makeProvider(text, uri);
+        const actions = provider.provideCodeActions(makeParams(uri, portDiag));
+        const fix = actions.find(a => a.title.includes("compatible port 'altFuel'"));
+
+        expect(fix).toBeDefined();
+        expect(fix!.edit?.changes?.[uri]?.[0].newText).toContain('altFuel');
+    });
+});
+
+describe('Code Actions — Unresolved Constraint Reference', () => {
+    it('should suggest nearest member replacement for unresolved path', async () => {
+        const uri = 'file:///test.sysml';
+        const text = `package Test {
+    part def Wheel {
+        attribute radius : Real;
+    }
+
+    requirement def BrakeReq {
+        subject wheel : Wheel;
+        require constraint {
+            wheel.radus > 0
+        }
+    }
+}`;
+
+        const { diagnostics } = await getSemanticDiagnostics(text, uri);
+        const constraintDiag = diagnostics.filter(d => d.code === 'unresolved-constraint-reference');
+        expect(constraintDiag.length).toBeGreaterThanOrEqual(1);
+
+        const { provider } = await makeProvider(text, uri);
+        const actions = provider.provideCodeActions(makeParams(uri, constraintDiag));
+        const fix = actions.find(a => a.title.includes("wheel.radius"));
+
+        expect(fix).toBeDefined();
+        expect(fix!.edit?.changes?.[uri]?.[0].newText).toBe('wheel.radius');
+    });
+});
+
+// ─────────────────────────────────────────────────────────────────
 // Keyword typo fixes (existing — verify still works)
 // ─────────────────────────────────────────────────────────────────
 
@@ -250,7 +338,7 @@ describe('Code Actions — Keyword Typo', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('Code Actions — No false positives', () => {
-    it('should return no actions for unresolved-type diagnostic', async () => {
+    it('should return no actions for unresolved-type diagnostic when file text is unavailable', async () => {
         const uri = 'file:///test.sysml';
         const { CodeActionProvider } = await import(
             '../../server/src/providers/codeActionProvider.js'
@@ -288,5 +376,114 @@ describe('Code Actions — No false positives', () => {
 
         const actions = provider.provideCodeActions(makeParams(uri, [diag]));
         expect(actions.length).toBe(0);
+    });
+});
+
+describe('Code Actions — Unresolved Type', () => {
+    it('should offer to import a workspace package that defines the missing type', async () => {
+        const uriMain = 'file:///main.sysml';
+        const uriLib = 'file:///lib.sysml';
+        const mainText = `package CameraTestBDD {
+    attribute resolution : Resolution;
+}`;
+        const libText = `package PictureTaking {
+    part def Resolution;
+}`;
+
+        const { DocumentManager } = await import('../../server/src/documentManager.js');
+        const { CodeActionProvider } = await import('../../server/src/providers/codeActionProvider.js');
+
+        const docManager = new DocumentManager();
+        docManager.parse(await makeDoc(mainText, uriMain));
+        docManager.parse(await makeDoc(libText, uriLib));
+
+        const provider = new CodeActionProvider(docManager);
+        const diag: Diagnostic = {
+            severity: 2,
+            range: { start: { line: 1, character: 27 }, end: { line: 1, character: 37 } },
+            message: "Type 'Resolution' is not defined in the current document or standard library",
+            source: 'sysml',
+            code: 'unresolved-type',
+            data: { typeName: 'Resolution' },
+        };
+
+        const actions = provider.provideCodeActions(makeParams(uriMain, [diag]));
+        const importFix = actions.find(a => a.title.includes("Import 'PictureTaking::*'"));
+
+        expect(importFix).toBeDefined();
+        expect(importFix!.edit?.changes?.[uriMain]?.[0].newText).toContain('public import PictureTaking::*;');
+    });
+
+    it('should offer to create a local attribute def stub for unresolved type in attribute context', async () => {
+        const uri = 'file:///test.sysml';
+        const text = `package CameraTestBDD {
+    attribute resolution : Resolution;
+}`;
+
+        const { provider } = await makeProvider(text, uri);
+        const diag: Diagnostic = {
+            severity: 2,
+            range: { start: { line: 1, character: 27 }, end: { line: 1, character: 37 } },
+            message: "Type 'Resolution' is not defined in the current document or standard library",
+            source: 'sysml',
+            code: 'unresolved-type',
+            data: { typeName: 'Resolution' },
+        };
+
+        const actions = provider.provideCodeActions(makeParams(uri, [diag]));
+        const createFix = actions.find(a => a.title.includes("Create local 'attribute def Resolution;'"));
+
+        expect(createFix).toBeDefined();
+        expect(createFix!.edit?.changes?.[uri]?.[0].newText).toContain('attribute def Resolution;');
+    });
+
+    it('should offer attribute def for unresolved Map in attribute context', async () => {
+        const uri = 'file:///test-map.sysml';
+        const text = `package CameraTestBDD {
+    attribute mapData : Map;
+}`;
+
+        const { provider } = await makeProvider(text, uri);
+        const diag: Diagnostic = {
+            severity: 2,
+            range: { start: { line: 1, character: 24 }, end: { line: 1, character: 27 } },
+            message: "Type 'Map' is not defined in the current document or standard library",
+            source: 'sysml',
+            code: 'unresolved-type',
+            data: { typeName: 'Map' },
+        };
+
+        const actions = provider.provideCodeActions(makeParams(uri, [diag]));
+        const createFix = actions.find(a => a.title.includes("Create local 'attribute def Map;'"));
+
+        expect(createFix).toBeDefined();
+        expect(createFix!.edit?.changes?.[uri]?.[0].newText).toContain('attribute def Map;');
+    });
+
+    it('should still offer attribute def when unresolved-type range is on attribute name', async () => {
+        const uri = 'file:///camera-bdd.sysml';
+        const text = `package CameraTestBDD {
+    part def CameraSystem {
+        attribute resolution : Resolution;
+    }
+}`;
+
+        const { provider } = await makeProvider(text, uri);
+        const diag: Diagnostic = {
+            severity: 2,
+            // Mirrors real-world diagnostic where range targets "resolution"
+            // instead of "Resolution".
+            range: { start: { line: 2, character: 18 }, end: { line: 2, character: 29 } },
+            message: "Type 'Resolution' is not defined in the current document or standard library",
+            source: 'sysml',
+            code: 'unresolved-type',
+            data: { typeName: 'Resolution' },
+        };
+
+        const actions = provider.provideCodeActions(makeParams(uri, [diag]));
+        const createFix = actions.find(a => a.title.includes("Create local 'attribute def Resolution;'"));
+
+        expect(createFix).toBeDefined();
+        expect(createFix!.edit?.changes?.[uri]?.[0].newText).toContain('attribute def Resolution;');
     });
 });
