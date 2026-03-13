@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.8.0]
+## [0.7.0]
 
 ### Added
 
@@ -18,11 +18,6 @@
 - Grammar updated to OMG "2026-02 - SysML v2 Release" — removed local `end <keyword>` patch in favour of upstream `endFeatureUsage` rule
 - MCP non-visual tools annotated with explicit "NOT Visualization" routing guidance
 - MCP preview response stripped to minimal render data (mermaidMarkup + title)
-
-## [0.7.0]
-
-### Changed
-
 - MCP tool routing guidance and aliases expanded for diagnostics, validation, and file-focused preview requests
 
 ### Fixed
