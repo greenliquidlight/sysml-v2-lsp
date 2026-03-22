@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 async function buildST(text: string, uri = 'test://test.sysml') {
     const { parseDocument } = await import('../../server/src/parser/parseDocument.js');
@@ -38,9 +38,9 @@ package test{
 }
 `;
         const { st, result } = await buildST(text);
-        
+
         const symbols = st.getSymbolsForUri('test://test.sysml');
-        
+
         const metadataSymbols = symbols.filter(s => s.kind === 'metadata def');
         expect(metadataSymbols.length).toBe(2);
         expect(metadataSymbols.map(s => s.name)).toEqual(['product', 'component']);
