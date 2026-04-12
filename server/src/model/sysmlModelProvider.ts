@@ -164,6 +164,16 @@ function readCommaSeparatedIdents(text: string, pos: number): string[] {
 }
 
 /**
+ * Replace line and block comments with spaces while preserving line/offset
+ * positions so index-based scans remain valid.
+ */
+function stripComments(text: string): string {
+    return text
+        .replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' '))
+        .replace(/\/\/[^\n]*/g, m => ' '.repeat(m.length));
+}
+
+/**
  * Provides the full semantic model for a document by converting the
  * server's internal ANTLR parse tree and symbol table into serializable DTOs.
  *
@@ -523,7 +533,7 @@ export class SysMLModelProvider {
         // Scan for standalone satisfy/verify statements that aren't part of any
         // symbol (e.g. top-level `satisfy X by Y;` inside a package).
         const fullText = lines.join('\n');
-        const standaloneSatisfy = this.extractStandaloneSatisfyVerify(fullText);
+        const standaloneSatisfy = this.extractStandaloneSatisfyVerify(stripComments(fullText));
         for (const rel of standaloneSatisfy) {
             // Avoid duplicates — only add if not already present
             const isDup = relationships.some(
@@ -1238,14 +1248,17 @@ export class SysMLModelProvider {
                 const [reqName, afterReq] = readNameOrQuoted(text, pos);
                 if (!reqName || reqName === 'requirement') continue;
 
-                // Look for 'by <satisfier>' clause
+                // Optional 'by <satisfier>' clause
                 const byPos = skipWS(text, afterReq);
                 const [byWord, afterBy] = readIdent(text, byPos);
-                if (byWord !== 'by') continue;  // standalone satisfy/verify must have 'by'
-                const [satisfier] = readNameOrQuoted(text, skipWS(text, afterBy));
-                if (!satisfier) continue;
+                let source = '(standalone)';
+                if (byWord === 'by') {
+                    const [byTarget] = readNameOrQuoted(text, skipWS(text, afterBy));
+                    if (!byTarget) continue;
+                    source = byTarget;
+                }
 
-                rels.push({ type: kw, source: satisfier, target: reqName });
+                rels.push({ type: kw, source, target: reqName });
             }
         }
         return rels;
@@ -1253,6 +1266,7 @@ export class SysMLModelProvider {
 
     /** Extract relationship keywords from element text. */
     private extractKeywordRelationships(elementName: string, elementText: string): RelationshipDTO[] {
+        elementText = stripComments(elementText);
         const rels: RelationshipDTO[] = [];
 
         // subsetting: `subsets X`
