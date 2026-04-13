@@ -540,6 +540,31 @@ package Design {
             expect(unsatisfied.length).toBe(0);
         });
 
+        it('should detect satisfy across files for shorthand satisfy syntax', async () => {
+            const reqText = `
+package Requirements {
+    requirement engineSpec {
+        subject e : Engine;
+    }
+}
+`;
+            const designText = `
+package Design {
+    part def Engine { }
+    satisfy Requirements::engineSpec;
+}
+`;
+            const diags = await getSemanticDiagnosticsForUri(
+                [
+                    { uri: 'file:///requirements.sysml', text: reqText },
+                    { uri: 'file:///design.sysml', text: designText },
+                ],
+                'file:///requirements.sysml',
+            );
+            const unsatisfied = diags.filter(d => d.code === 'unsatisfied-requirement');
+            expect(unsatisfied.length).toBe(0);
+        });
+
         it('should not warn for requirement redefinitions inside satisfy blocks', async () => {
             const text = `
 package Requirements {
@@ -678,6 +703,37 @@ package Design {
 package Verification {
     verification case def EngineTest { }
     verify Requirements::engineSpec by EngineTest;
+}
+`;
+            const diags = await getSemanticDiagnosticsForUri(
+                [
+                    { uri: 'file:///requirements.sysml', text: reqText },
+                    { uri: 'file:///design.sysml', text: designText },
+                    { uri: 'file:///verification.sysml', text: verifyText },
+                ],
+                'file:///requirements.sysml',
+            );
+            const unverified = diags.filter(d => d.code === 'unverified-requirement');
+            expect(unverified.length).toBe(0);
+        });
+
+        it('should detect verify across files for shorthand verify syntax', async () => {
+            const reqText = `
+package Requirements {
+    requirement engineSpec {
+        subject e : Engine;
+    }
+}
+`;
+            const designText = `
+package Design {
+    part def Engine { }
+    satisfy Requirements::engineSpec;
+}
+`;
+            const verifyText = `
+package Verification {
+    verify Requirements::engineSpec;
 }
 `;
             const diags = await getSemanticDiagnosticsForUri(

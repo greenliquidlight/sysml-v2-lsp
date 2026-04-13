@@ -1,5 +1,6 @@
 import { Diagnostic, DiagnosticSeverity } from 'vscode-languageserver/node.js';
 import { DocumentManager } from '../documentManager.js';
+import { SysMLModelProvider } from '../model/sysmlModelProvider.js';
 import { getLibraryPackageNames, resolveLibraryType } from '../library/libraryIndex.js';
 import { SysMLElementKind, SysMLSymbol, isDefinition } from '../symbols/sysmlElements.js';
 
@@ -73,6 +74,8 @@ function isISQValueType(name: string): boolean {
  * - Mandatory features with unresolved types
  */
 export class SemanticValidator {
+    private readonly modelProvider: SysMLModelProvider;
+
     /** Cached workspace-wide satisfy data, invalidated when any document version changes. */
     private satisfyCache?: {
         versionKey: string;
@@ -86,7 +89,44 @@ export class SemanticValidator {
         verifiedNames: Set<string>;
     };
 
-    constructor(private readonly documentManager: DocumentManager) { }
+    constructor(private readonly documentManager: DocumentManager) {
+        this.modelProvider = new SysMLModelProvider(documentManager);
+    }
+
+    private addRequirementNameVariants(out: Set<string>, ref: string | undefined): void {
+        if (!ref) return;
+        const trimmed = ref.trim();
+        if (!trimmed) return;
+        out.add(trimmed);
+        const lastSeg = trimmed.includes('::') ? trimmed.split('::').pop()! : trimmed;
+        out.add(lastSeg);
+    }
+
+    private collectWorkspaceRequirementRelationshipNames(): {
+        satisfiedNames: Set<string>;
+        verifiedNames: Set<string>;
+    } {
+        const satisfiedNames = new Set<string>();
+        const verifiedNames = new Set<string>();
+        const uris = this.documentManager.getUris();
+
+        for (const uri of uris) {
+            const version = this.documentManager.getVersion(uri);
+            if (version < 0) continue;
+
+            const model = this.modelProvider.getModel(uri, version, ['relationships']);
+            const rels = model.relationships ?? [];
+            for (const rel of rels) {
+                if (rel.type === 'satisfy') {
+                    this.addRequirementNameVariants(satisfiedNames, rel.target);
+                } else if (rel.type === 'verify') {
+                    this.addRequirementNameVariants(verifiedNames, rel.target);
+                }
+            }
+        }
+
+        return { satisfiedNames, verifiedNames };
+    }
 
     /**
      * Run all semantic validation rules and return LSP Diagnostic objects.
@@ -588,12 +628,11 @@ export class SemanticValidator {
                 satisfiedNames = this.satisfyCache.satisfiedNames;
                 satisfyBlockRanges = this.satisfyCache.satisfyBlockRanges;
             } else {
-                satisfiedNames = new Set<string>();
+                satisfiedNames = this.collectWorkspaceRequirementRelationshipNames().satisfiedNames;
                 satisfyBlockRanges = new Map();
                 for (const uri of uris) {
                     const text = this.documentManager.getText(uri);
                     if (text) {
-                        this.extractSatisfyReferences(text, satisfiedNames);
                         satisfyBlockRanges.set(uri, this.extractSatisfyBlockRanges(text));
                     }
                 }
@@ -648,8 +687,8 @@ export class SemanticValidator {
      * Adds both the full qualified name and the simple (last segment) name.
      *
      * Patterns matched:
-     *   satisfy QualifiedName by ...
-     *   satisfy QualifiedName;
+    *   satisfy QualifiedName by ...
+    *   satisfy QualifiedName;
      */
     private extractSatisfyReferences(text: string, out: Set<string>): void {
         // Match: satisfy QualifiedName by ...
@@ -754,12 +793,11 @@ export class SemanticValidator {
                 satisfiedNames = this.satisfyCache.satisfiedNames;
                 satisfyBlockRanges = this.satisfyCache.satisfyBlockRanges;
             } else {
-                satisfiedNames = new Set<string>();
+                satisfiedNames = this.collectWorkspaceRequirementRelationshipNames().satisfiedNames;
                 satisfyBlockRanges = new Map();
                 for (const uri of uris) {
                     const text = this.documentManager.getText(uri);
                     if (text) {
-                        this.extractSatisfyReferences(text, satisfiedNames);
                         satisfyBlockRanges.set(uri, this.extractSatisfyBlockRanges(text));
                     }
                 }
@@ -770,13 +808,7 @@ export class SemanticValidator {
             if (this.verifyCache && this.verifyCache.versionKey === versionKey) {
                 verifiedNames = this.verifyCache.verifiedNames;
             } else {
-                verifiedNames = new Set<string>();
-                for (const uri of uris) {
-                    const text = this.documentManager.getText(uri);
-                    if (text) {
-                        this.extractVerifyReferences(text, verifiedNames);
-                    }
-                }
+                verifiedNames = this.collectWorkspaceRequirementRelationshipNames().verifiedNames;
                 this.verifyCache = { versionKey, verifiedNames };
             }
         } else {
