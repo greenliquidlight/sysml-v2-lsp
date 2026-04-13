@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/sysml-v2-lsp?logo=npm)](https://www.npmjs.com/package/sysml-v2-lsp)
 
-[![SysML v2.0 Language Support VS Code Marketplace](https://img.shields.io/visual-studio-marketplace/v/JamieD.sysml-v2-support?label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support)
+[![SysML v2.0 Language Support VS Code Marketplace](https://img.shields.io/badge/Install-VS%20Code%20Marketplace-007ACC?logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=JamieD.sysml-v2-support)
 
 A [Language Server Protocol (LSP)](https://microsoft.github.io/language-server-protocol/) implementation for [SysML v2](https://www.omgsysml.org/SysML-2.htm).
 
